@@ -6,6 +6,7 @@ go_library(
         "blinded_blocks.go",
         "blocks.go",
         "config.go",
+        "light_client.go",
         "log.go",
         "pool.go",
         "server.go",
