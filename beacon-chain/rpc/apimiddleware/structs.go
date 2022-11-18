@@ -93,7 +93,6 @@ type SyncCommitteesResponseJson struct {
 	Finalized           bool                         `json:"finalized"`
 }
 
-<<<<<<< HEAD
 type RandaoResponseJson struct {
 	Data *struct {
 		Randao string `json:"randao" hex:"true"`
