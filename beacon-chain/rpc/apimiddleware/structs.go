@@ -8,9 +8,9 @@ import (
 	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
 )
 
-//----------------
+// ----------------
 // Requests and responses.
-//----------------
+// ----------------
 
 type GenesisResponseJson struct {
 	Data *GenesisResponse_GenesisJson `json:"data"`
@@ -93,12 +93,48 @@ type SyncCommitteesResponseJson struct {
 	Finalized           bool                         `json:"finalized"`
 }
 
+<<<<<<< HEAD
 type RandaoResponseJson struct {
 	Data *struct {
 		Randao string `json:"randao" hex:"true"`
 	} `json:"data"`
 	ExecutionOptimistic bool `json:"execution_optimistic"`
 	Finalized           bool `json:"finalized"`
+}
+
+type LightClientBootstrapResponseJson struct {
+	Version string                    `json:"version" enum:"true"`
+	Data    *LightClientBootstrapJson `json:"data"`
+}
+
+type LightClientBootstrapJson struct {
+	Header                     *BeaconBlockHeaderJson `json:"header"`
+	CurrentSyncCommittee       *SyncCommitteeJson     `json:"current_sync_committee"`
+	CurrentSyncCommitteeBranch []string               `json:"current_sync_committee_branch" hex:"true"`
+}
+
+type LightClientFinalityUpdateResponseJson struct {
+	Version string                         `json:"version" enum:"true"`
+	Data    *LightClientFinalityUpdateJson `json:"data"`
+}
+
+type LightClientFinalityUpdateJson struct {
+	AttestedHeader  *BeaconBlockHeaderJson `json:"attested_header"`
+	FinalizedHeader *BeaconBlockHeaderJson `json:"finalized_header"`
+	FinalityBranch  []string               `json:"finality_branch" hex:"true"`
+	SyncAggregate   *SyncAggregateJson     `json:"sync_aggregate"`
+	SignatureSlot   string                 `json:"signature_slot"`
+}
+
+type LightClientOptimisticUpdateResponseJson struct {
+	Version string                           `json:"version" enum:"true"`
+	Data    *LightClientOptimisticUpdateJson `json:"data"`
+}
+
+type LightClientOptimisticUpdateJson struct {
+	AttestedHeader *BeaconBlockHeaderJson `json:"attested_header"`
+	SyncAggregate  *SyncAggregateJson     `json:"sync_aggregate"`
+	SignatureSlot  string                 `json:"signature_slot"`
 }
 
 type BlockHeadersResponseJson struct {
@@ -353,9 +389,9 @@ type LivenessResponseJson struct {
 	} `json:"data"`
 }
 
-//----------------
+// ----------------
 // Reusable types.
-//----------------
+// ----------------
 
 type CheckpointJson struct {
 	Epoch string `json:"epoch"`
@@ -1053,7 +1089,7 @@ type HistoricalSummaryJson struct {
 	StateSummaryRoot string `json:"state_summary_root" hex:"true"`
 }
 
-//----------------
+// ----------------
 // SSZ
 // ---------------
 
