@@ -262,7 +262,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 		data := ethpbv2.OptimisticUpdate{
 			AttestedHeader: attestedHeader,
 			SyncAggregate:  &syncAggregateV1,
-			SignatureSlot:  uint64(prevSlot),
+			SignatureSlot:  prevSlot,
 		}
 
 		// Return the result
@@ -384,7 +384,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 					FinalizedHeader: finalizedHeader,
 					FinalityBranch:  finalityBranch,
 					SyncAggregate:   &syncAggregateV1,
-					SignatureSlot:   uint64(signed.Block().Slot()),
+					SignatureSlot:   signed.Block().Slot(),
 				}
 
 				// Return the result
