@@ -263,7 +263,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 			}
 		}
 
-		update, err := lightclienthelpers.CreateLightClientUpdate(
+		update, err := lightclienthelpers.NewLightClientUpdate(
 			ctx,
 			config,
 			slotsPerPeriod,
@@ -278,7 +278,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 			return
 		}
 
-		optimisticUpdate := lightclienthelpers.CreateLightClientOptimisticUpdate(update)
+		optimisticUpdate := lightclienthelpers.NewLightClientOptimisticUpdate(update)
 
 		// Return the result
 		result := &ethpbv2.LightClientOptimisticUpdateResponse{
@@ -366,7 +366,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 					}
 				}
 
-				update, err := lightclienthelpers.CreateLightClientUpdate(
+				update, err := lightclienthelpers.NewLightClientUpdate(
 					ctx,
 					config,
 					slotsPerPeriod,
@@ -381,7 +381,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 					return
 				}
 
-				finalityUpdate := lightclienthelpers.CreateLightClientFinalityUpdate(update)
+				finalityUpdate := lightclienthelpers.NewLightClientFinalityUpdate(update)
 
 				// Return the result
 				result := &ethpbv2.LightClientFinalityUpdateResponse{
