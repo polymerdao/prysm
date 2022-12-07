@@ -230,7 +230,7 @@ func handleStateEvents(
 		if _, ok := requestedTopics[LightClientFinalityUpdateTopic]; !ok {
 			return nil
 		}
-		update, ok := event.Data.(*ethpbv2.LightClientFinalityUpdateResponse)
+		update, ok := event.Data.(*ethpbv2.LightClientUpdateResponse)
 		if !ok {
 			return nil
 		}
@@ -239,7 +239,7 @@ func handleStateEvents(
 		if _, ok := requestedTopics[LightClientOptimisticUpdateTopic]; !ok {
 			return nil
 		}
-		update, ok := event.Data.(*ethpbv2.LightClientOptimisticUpdateResponse)
+		update, ok := event.Data.(*ethpbv2.LightClientUpdateResponse)
 		if !ok {
 			return nil
 		}
