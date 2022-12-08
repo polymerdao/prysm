@@ -420,9 +420,9 @@ func receiveEvents(eventChan <-chan *sse.Event, w http.ResponseWriter, req *http
 			case events.BLSToExecutionChangeTopic:
 				data = &SignedBLSToExecutionChangeJson{}
 			case events.LightClientFinalityUpdateTopic:
-				data = &LightClientUpdateJson{}
+				data = &LightClientUpdateResponseJson{}
 			case events.LightClientOptimisticUpdateTopic:
-				data = &LightClientUpdateJson{}
+				data = &LightClientUpdateResponseJson{}
 			case "error":
 				data = &EventErrorJson{}
 			default:
