@@ -278,10 +278,12 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 			return
 		}
 
+		optimisticUpdate := lightclienthelpers.NewLightClientOptimisticUpdateFromUpdate(update)
+
 		// Return the result
-		result := &ethpbv2.LightClientUpdateResponse{
+		result := &ethpbv2.LightClientOptimisticUpdateResponse{
 			Version: ethpbv2.Version(signed.Version()),
-			Data:    update,
+			Data:    optimisticUpdate,
 		}
 
 		s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
@@ -379,10 +381,12 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 					return
 				}
 
+				finalityUpdate := lightclienthelpers.NewLightClientFinalityUpdateFromUpdate(update)
+
 				// Return the result
-				result := &ethpbv2.LightClientUpdateResponse{
+				result := &ethpbv2.LightClientFinalityUpdateResponse{
 					Version: ethpbv2.Version(signed.Version()),
-					Data:    update,
+					Data:    finalityUpdate,
 				}
 
 				// Send event
