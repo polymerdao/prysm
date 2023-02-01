@@ -37,7 +37,7 @@ func (b *BeaconState) CurrentSyncCommitteeGeneralizedIndex() (uint64, error) {
 		return 0, errNotSupported("CurrentSyncCommitteeGeneralizedIndex", b.version)
 	}
 
-	return uint64(nativetypes.CurrentSyncCommittee.RealPosition()), nil
+	return uint64(types.CurrentSyncCommittee.RealPosition()), nil
 }
 
 // NextSyncCommitteeGeneralizedIndex for the beacon state.
@@ -46,7 +46,7 @@ func (b *BeaconState) NextSyncCommitteeGeneralizedIndex() (uint64, error) {
 		return 0, errNotSupported("NextSyncCommitteeGeneralizedIndex", b.version)
 	}
 
-	return uint64(nativetypes.NextSyncCommittee.RealPosition()), nil
+	return uint64(types.NextSyncCommittee.RealPosition()), nil
 }
 
 // CurrentSyncCommitteeProof from the state's Merkle trie representation.
