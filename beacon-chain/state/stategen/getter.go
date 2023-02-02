@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
@@ -12,7 +14,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
 	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"go.opencensus.io/trace"
 )
 
 var ErrNoDataForSlot = errors.New("cannot retrieve data for slot")
@@ -56,11 +57,7 @@ func (s *State) StateByRoot(ctx context.Context, blockRoot [32]byte) (state.Beac
 
 	// Genesis case. If block root is zero hash, short circuit to use genesis state stored in DB.
 	if blockRoot == params.BeaconConfig().ZeroHash {
-		root, err := s.beaconDB.GenesisBlockRoot(ctx)
-		if err != nil {
-			return nil, errors.Wrap(err, "could not get genesis block root")
-		}
-		blockRoot = root
+		return s.beaconDB.GenesisState(ctx)
 	}
 	return s.loadStateByRoot(ctx, blockRoot)
 }
