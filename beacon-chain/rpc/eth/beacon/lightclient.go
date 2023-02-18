@@ -261,7 +261,6 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get the current state
 	state, err := bs.HeadFetcher.HeadState(ctx)
@@ -299,25 +298,12 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
 	}
 
-	// Get finalized block
-	var finalizedBlock interfaces.SignedBeaconBlock
-	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-	if finalizedCheckPoint != nil {
-		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-		finalizedBlock, err = bs.BeaconDB.Block(ctx, finalizedRoot)
-		if err != nil {
-			finalizedBlock = nil
-		}
-	}
-
 	update, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		state,
 		block,
 		attestedState,
-		finalizedBlock,
 	)
 
 	if err != nil {
