@@ -283,6 +283,32 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get latest block: %v", err)
 	}
 
+	// Loop through the blocks until we find a block that has desired number of sync committee signatures
+	var numOfSyncCommitteeSignatures uint64
+	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+	}
+
+	for numOfSyncCommitteeSignatures < config.MinSyncCommitteeParticipants {
+		// Get the parent block
+		parentRoot := block.Block().ParentRoot()
+		block, err = bs.BeaconDB.Block(ctx, parentRoot)
+		if err != nil || block == nil {
+			return nil, status.Errorf(codes.Internal, "Could not get parent block: %v", err)
+		}
+
+		numOfSyncCommitteeSignatures = 0
+		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+		}
+	}
+
+	// Get the state
+	state, err = bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+	}
+
 	// Get attested state
 	attestedRoot := block.Block().ParentRoot()
 	attestedBlock, err := bs.BeaconDB.Block(ctx, attestedRoot)
