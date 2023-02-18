@@ -182,7 +182,6 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
 	config *params.BeaconChainConfig,
-	slotsPerPeriod uint64,
 	state state.BeaconState,
 	block interfaces.SignedBeaconBlock,
 	attestedState state.BeaconState,
@@ -323,7 +322,7 @@ func NewLightClientUpdateFromBeaconState(
 	attestedState state.BeaconState,
 	finalizedBlock interfaces.SignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
 
-	result, err := NewLightClientFinalityUpdateFromBeaconState(ctx, config, slotsPerPeriod, state, block, attestedState,
+	result, err := NewLightClientFinalityUpdateFromBeaconState(ctx, config, state, block, attestedState,
 		finalizedBlock)
 	if err != nil {
 		return nil, err
