@@ -178,7 +178,6 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get the current state
 	state, err := bs.HeadFetcher.HeadState(ctx)
@@ -230,7 +229,6 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 	update, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		state,
 		block,
 		attestedState,
