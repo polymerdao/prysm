@@ -297,16 +297,17 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 			return nil, status.Errorf(codes.Internal, "Could not get parent block: %v", err)
 		}
 
+		// Get the number of sync committee signatures
 		numOfSyncCommitteeSignatures = 0
 		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
 			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
 		}
-	}
 
-	// Get the state
-	state, err = bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+		// Get the state
+		state, err = bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+		}
 	}
 
 	// Get attested state
