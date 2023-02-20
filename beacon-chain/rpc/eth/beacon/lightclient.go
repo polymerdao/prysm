@@ -289,6 +289,7 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
 	}
 
+	var blockChanged bool
 	for numOfSyncCommitteeSignatures < config.MinSyncCommitteeParticipants {
 		// Get the parent block
 		parentRoot := block.Block().ParentRoot()
@@ -303,7 +304,11 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
 		}
 
-		// Get the state
+		blockChanged = true
+	}
+
+	if blockChanged {
+		// Get the new state
 		state, err = bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
