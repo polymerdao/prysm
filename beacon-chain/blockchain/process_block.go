@@ -349,22 +349,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 	finalized := s.ForkChoicer().FinalizedCheckpoint()
 
 	// LightClientFinalityUpdate needs super majority
-	if finalized.Epoch > s.lastPublishedLightClientEpoch {
-		config := params.BeaconConfig()
-		if finalized.Epoch > config.AltairForkEpoch {
-			syncAggregate, err := signed.Block().Body().SyncAggregate()
-			if err == nil {
-				if syncAggregate.SyncCommitteeBits.Count()*3 >= config.SyncCommitteeSize*2 {
-					_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
-					if err != nil {
-						log.WithError(err)
-					} else {
-						s.lastPublishedLightClientEpoch = finalized.Epoch
-					}
-				}
-			}
-		}
-	}
+	s.tryPublishLightClientFinalityUpdate(ctx, signed, finalized, postState)
 
 	if finalized.Epoch > currStoreFinalizedEpoch || (finalized.Epoch == postStateFinalizedEpoch && finalized.Epoch > preStateFinalizedEpoch) {
 		if err := s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]}); err != nil {
@@ -406,6 +391,25 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 	}
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
+}
+
+func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
+	if finalized.Epoch > s.lastPublishedLightClientEpoch {
+		config := params.BeaconConfig()
+		if finalized.Epoch > config.AltairForkEpoch {
+			syncAggregate, err := signed.Block().Body().SyncAggregate()
+			if err == nil {
+				if syncAggregate.SyncCommitteeBits.Count()*3 >= config.SyncCommitteeSize*2 {
+					_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
+					if err != nil {
+						log.WithError(err)
+					} else {
+						s.lastPublishedLightClientEpoch = finalized.Epoch
+					}
+				}
+			}
+		}
+	}
 }
 
 func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionData, error) {
