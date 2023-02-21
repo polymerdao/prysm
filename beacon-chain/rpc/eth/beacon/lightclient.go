@@ -73,6 +73,12 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 	startPeriod := req.StartPeriod
 	endPeriod := startPeriod + count - 1
 
+	// The end of start period must be later than Altair fork epoch, otherwise, can not get the sync committee votes
+	startPeriodEndSlot := (startPeriod+1)*slotsPerPeriod - 1
+	if startPeriodEndSlot < uint64(config.AltairForkEpoch)*uint64(config.SlotsPerEpoch) {
+		startPeriod = uint64(config.AltairForkEpoch) * uint64(config.SlotsPerEpoch) / slotsPerPeriod
+	}
+
 	headState, err := bs.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
