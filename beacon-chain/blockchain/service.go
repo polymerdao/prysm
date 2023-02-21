@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/prysmaticlabs/prysm/v3/async/event"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache/depositcache"
@@ -38,7 +40,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
 	"github.com/prysmaticlabs/prysm/v3/time/slots"
-	"go.opencensus.io/trace"
 )
 
 // Service represents a service that handles the internal
@@ -58,6 +59,7 @@ type Service struct {
 	initSyncBlocksLock      sync.RWMutex
 	wsVerifier              *WeakSubjectivityVerifier
 	processAttestationsLock sync.Mutex
+	lastPublishedLightClientEpoch primitives.Epoch
 }
 
 // config options for the service.
