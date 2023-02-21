@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
-
 	"github.com/sirupsen/logrus"
+	"go.opencensus.io/trace"
 
 	"github.com/prysmaticlabs/prysm/v3/async/event"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/blocks"
@@ -358,6 +357,25 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 	// Save finalized check point to db and more.
 	postStateFinalizedEpoch := postState.FinalizedCheckpoint().Epoch
 	finalized := s.ForkChoicer().FinalizedCheckpoint()
+
+	// LightClientFinalityUpdate needs super majority
+	if finalized.Epoch > s.lastPublishedLightClientEpoch {
+		config := params.BeaconConfig()
+		if finalized.Epoch > config.AltairForkEpoch {
+			syncAggregate, err := signed.Block().Body().SyncAggregate()
+			if err == nil {
+				if syncAggregate.SyncCommitteeBits.Count()*3 >= config.SyncCommitteeSize*2 {
+					_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
+					if err != nil {
+						log.WithError(err)
+					} else {
+						s.lastPublishedLightClientEpoch = finalized.Epoch
+					}
+				}
+			}
+		}
+	}
+
 	if finalized.Epoch > currStoreFinalizedEpoch || (finalized.Epoch == postStateFinalizedEpoch && finalized.Epoch > preStateFinalizedEpoch) {
 		if err := s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]}); err != nil {
 			return err
@@ -381,11 +399,6 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 					},
 				})
 			}()
-
-			_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
-			if err != nil {
-				log.WithError(err)
-			}
 
 			// Use a custom deadline here, since this method runs asynchronously.
 			// We ignore the parent method's context and instead create a new one
