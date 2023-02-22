@@ -394,21 +394,29 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 }
 
 func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
-	if finalized.Epoch > s.lastPublishedLightClientEpoch {
-		config := params.BeaconConfig()
-		if finalized.Epoch > config.AltairForkEpoch {
-			syncAggregate, err := signed.Block().Body().SyncAggregate()
-			if err == nil {
-				if syncAggregate.SyncCommitteeBits.Count()*3 >= config.SyncCommitteeSize*2 {
-					_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
-					if err != nil {
-						log.WithError(err)
-					} else {
-						s.lastPublishedLightClientEpoch = finalized.Epoch
-					}
-				}
-			}
-		}
+	if finalized.Epoch <= s.lastPublishedLightClientEpoch {
+		return
+	}
+
+	config := params.BeaconConfig()
+	if finalized.Epoch < config.AltairForkEpoch {
+		return
+	}
+
+	syncAggregate, err := signed.Block().Body().SyncAggregate()
+	if err != nil || syncAggregate == nil {
+		return
+	}
+
+	if syncAggregate.SyncCommitteeBits.Count()*3 < config.SyncCommitteeSize*2 {
+		return
+	}
+
+	_, err = s.sendLightClientFinalityUpdate(ctx, signed, postState)
+	if err != nil {
+		log.WithError(err)
+	} else {
+		s.lastPublishedLightClientEpoch = finalized.Epoch
 	}
 }
 
