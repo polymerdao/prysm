@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"go.opencensus.io/trace"
-
 	"github.com/sirupsen/logrus"
+	"go.opencensus.io/trace"
 
 	"github.com/prysmaticlabs/prysm/v3/async/event"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/blocks"
@@ -358,6 +357,10 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 	// Save finalized check point to db and more.
 	postStateFinalizedEpoch := postState.FinalizedCheckpoint().Epoch
 	finalized := s.ForkChoicer().FinalizedCheckpoint()
+
+	// LightClientFinalityUpdate needs super majority
+	s.tryPublishLightClientFinalityUpdate(ctx, signed, finalized, postState)
+
 	if finalized.Epoch > currStoreFinalizedEpoch || (finalized.Epoch == postStateFinalizedEpoch && finalized.Epoch > preStateFinalizedEpoch) {
 		if err := s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]}); err != nil {
 			return err
@@ -382,11 +385,6 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 				})
 			}()
 
-			_, err := s.sendLightClientFinalityUpdate(ctx, signed, postState)
-			if err != nil {
-				log.WithError(err)
-			}
-
 			// Use a custom deadline here, since this method runs asynchronously.
 			// We ignore the parent method's context and instead create a new one
 			// with a custom deadline, therefore using the background context instead.
@@ -403,6 +401,33 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.SignedBeaconBlo
 	}
 	onBlockProcessingTime.Observe(float64(time.Since(startTime).Milliseconds()))
 	return nil
+}
+
+func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
+	if finalized.Epoch <= s.lastPublishedLightClientEpoch {
+		return
+	}
+
+	config := params.BeaconConfig()
+	if finalized.Epoch < config.AltairForkEpoch {
+		return
+	}
+
+	syncAggregate, err := signed.Block().Body().SyncAggregate()
+	if err != nil || syncAggregate == nil {
+		return
+	}
+
+	if syncAggregate.SyncCommitteeBits.Count()*3 < config.SyncCommitteeSize*2 {
+		return
+	}
+
+	_, err = s.sendLightClientFinalityUpdate(ctx, signed, postState)
+	if err != nil {
+		log.WithError(err)
+	} else {
+		s.lastPublishedLightClientEpoch = finalized.Epoch
+	}
 }
 
 func getStateVersionAndPayload(st state.BeaconState) (int, interfaces.ExecutionData, error) {

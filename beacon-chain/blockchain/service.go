@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"go.opencensus.io/trace"
+
 	"github.com/prysmaticlabs/prysm/v3/async/event"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache/depositcache"
@@ -38,27 +40,27 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
 	"github.com/prysmaticlabs/prysm/v3/time/slots"
-	"go.opencensus.io/trace"
 )
 
 // Service represents a service that handles the internal
 // logic of managing the full PoS beacon chain.
 type Service struct {
-	cfg                     *config
-	ctx                     context.Context
-	cancel                  context.CancelFunc
-	genesisTime             time.Time
-	head                    *head
-	headLock                sync.RWMutex
-	originBlockRoot         [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
-	nextEpochBoundarySlot   primitives.Slot
-	boundaryRoots           [][32]byte
-	checkpointStateCache    *cache.CheckpointStateCache
-	initSyncBlocks          map[[32]byte]interfaces.SignedBeaconBlock
-	initSyncBlocksLock      sync.RWMutex
-	justifiedBalances       *stateBalanceCache
-	wsVerifier              *WeakSubjectivityVerifier
-	processAttestationsLock sync.Mutex
+	cfg                           *config
+	ctx                           context.Context
+	cancel                        context.CancelFunc
+	genesisTime                   time.Time
+	head                          *head
+	headLock                      sync.RWMutex
+	originBlockRoot               [32]byte // genesis root, or weak subjectivity checkpoint root, depending on how the node is initialized
+	nextEpochBoundarySlot         primitives.Slot
+	boundaryRoots                 [][32]byte
+	checkpointStateCache          *cache.CheckpointStateCache
+	initSyncBlocks                map[[32]byte]interfaces.SignedBeaconBlock
+	initSyncBlocksLock            sync.RWMutex
+	justifiedBalances             *stateBalanceCache
+	wsVerifier                    *WeakSubjectivityVerifier
+	processAttestationsLock       sync.Mutex
+	lastPublishedLightClientEpoch primitives.Epoch
 }
 
 // config options for the service.
