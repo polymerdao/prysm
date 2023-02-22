@@ -50,7 +50,6 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 	postState state.BeaconState) (int, error) {
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get attested state
 	attestedRoot := signed.Block().ParentRoot()
@@ -59,25 +58,12 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 		return 0, errors.Wrap(err, "could not get attested state")
 	}
 
-	// Get finalized block
-	var finalizedBlock interfaces.SignedBeaconBlock
-	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-	if finalizedCheckPoint != nil {
-		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-		finalizedBlock, err = s.cfg.BeaconDB.Block(ctx, finalizedRoot)
-		if err != nil {
-			finalizedBlock = nil
-		}
-	}
-
 	update, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		postState,
 		signed,
 		attestedState,
-		finalizedBlock,
 	)
 
 	if err != nil {
@@ -103,7 +89,6 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 	postState state.BeaconState) (int, error) {
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get attested state
 	attestedRoot := signed.Block().ParentRoot()
@@ -126,7 +111,6 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 	update, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		postState,
 		signed,
 		attestedState,

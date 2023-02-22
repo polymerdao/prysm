@@ -178,7 +178,6 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get the current state
 	state, err := bs.HeadFetcher.HeadState(ctx)
@@ -230,7 +229,6 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 	update, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		state,
 		block,
 		attestedState,
@@ -261,7 +259,6 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 
 	// Determine slots per period
 	config := params.BeaconConfig()
-	slotsPerPeriod := uint64(config.EpochsPerSyncCommitteePeriod) * uint64(config.SlotsPerEpoch)
 
 	// Get the current state
 	state, err := bs.HeadFetcher.HeadState(ctx)
@@ -286,6 +283,38 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get latest block: %v", err)
 	}
 
+	// Loop through the blocks until we find a block that has desired number of sync committee signatures
+	var numOfSyncCommitteeSignatures uint64
+	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+	}
+
+	var blockChanged bool
+	for numOfSyncCommitteeSignatures < config.MinSyncCommitteeParticipants {
+		// Get the parent block
+		parentRoot := block.Block().ParentRoot()
+		block, err = bs.BeaconDB.Block(ctx, parentRoot)
+		if err != nil || block == nil {
+			return nil, status.Errorf(codes.Internal, "Could not get parent block: %v", err)
+		}
+
+		// Get the number of sync committee signatures
+		numOfSyncCommitteeSignatures = 0
+		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+		}
+
+		blockChanged = true
+	}
+
+	if blockChanged {
+		// Get the new state
+		state, err = bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+		}
+	}
+
 	// Get attested state
 	attestedRoot := block.Block().ParentRoot()
 	attestedBlock, err := bs.BeaconDB.Block(ctx, attestedRoot)
@@ -299,25 +328,12 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
 	}
 
-	// Get finalized block
-	var finalizedBlock interfaces.SignedBeaconBlock
-	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
-	if finalizedCheckPoint != nil {
-		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
-		finalizedBlock, err = bs.BeaconDB.Block(ctx, finalizedRoot)
-		if err != nil {
-			finalizedBlock = nil
-		}
-	}
-
 	update, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		config,
-		slotsPerPeriod,
 		state,
 		block,
 		attestedState,
-		finalizedBlock,
 	)
 
 	if err != nil {
