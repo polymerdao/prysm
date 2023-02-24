@@ -49,7 +49,7 @@ var ValidatorsParticipatingAtEpoch = func(epoch primitives.Epoch) types.Evaluato
 // are active.
 var ValidatorSyncParticipation = types.Evaluator{
 	Name:       "validator_sync_participation_%d",
-	Policy:     policies.AfterNthEpoch(helpers.AltairE2EForkEpoch - 1),
+	Policy:     policies.OnwardsNthEpoch(helpers.AltairE2EForkEpoch),
 	Evaluation: validatorsSyncParticipation,
 }
 
@@ -148,6 +148,11 @@ func validatorsParticipating(_ *types.EvaluationContext, conns ...*grpc.ClientCo
 			if err != nil {
 				return errors.Wrap(err, "failed to get missing validators")
 			}
+		case *eth.BeaconStateContainer_CapellaState:
+			missSrcVals, missTgtVals, missHeadVals, err = findMissingValidators(obj.CapellaState.PreviousEpochParticipation)
+			if err != nil {
+				return errors.Wrap(err, "failed to get missing validators")
+			}
 		default:
 			return fmt.Errorf("unrecognized version: %v", st.Version)
 		}
@@ -177,7 +182,10 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	}
 	currSlot := slots.CurrentSlot(uint64(genesis.GenesisTime.AsTime().Unix()))
 	currEpoch := slots.ToEpoch(currSlot)
-	lowestBound := currEpoch - 1
+	lowestBound := primitives.Epoch(0)
+	if currEpoch >= 1 {
+		lowestBound = currEpoch - 1
+	}
 
 	if lowestBound < helpers.AltairE2EForkEpoch {
 		lowestBound = helpers.AltairE2EForkEpoch
@@ -263,7 +271,7 @@ func validatorsSyncParticipation(_ *types.EvaluationContext, conns ...*grpc.Clie
 	return nil
 }
 
-func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfaces.SignedBeaconBlock, error) {
+func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	if container.GetPhase0Block() != nil {
 		return nil, errors.New("block doesn't support sync committees")
 	}
@@ -275,6 +283,12 @@ func syncCompatibleBlockFromCtr(container *ethpb.BeaconBlockContainer) (interfac
 	}
 	if container.GetBlindedBellatrixBlock() != nil {
 		return blocks.NewSignedBeaconBlock(container.GetBlindedBellatrixBlock())
+	}
+	if container.GetCapellaBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetCapellaBlock())
+	}
+	if container.GetBlindedCapellaBlock() != nil {
+		return blocks.NewSignedBeaconBlock(container.GetBlindedCapellaBlock())
 	}
 	return nil, errors.New("no supported block type in container")
 }
