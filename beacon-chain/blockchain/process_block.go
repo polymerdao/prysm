@@ -45,7 +45,7 @@ const depositDeadline = 20 * time.Second
 var initialSyncBlockCacheSize = uint64(2 * params.BeaconConfig().SlotsPerEpoch)
 
 // sendLightClientOptimisticUpdate sends a light client optimistic update notification of  to the state feed.
-func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock,
+func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	postState state.BeaconState) (int, error) {
 	// Determine slots per period
 	config := params.BeaconConfig()
@@ -84,7 +84,7 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 }
 
 // sendLightClientFinalityUpdate sends a light client finality update notification of  to the state feed.
-func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock,
+func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock,
 	postState state.BeaconState) (int, error) {
 	// Determine slots per period
 	config := params.BeaconConfig()
@@ -97,7 +97,7 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 	}
 
 	// Get finalized block
-	var finalizedBlock interfaces.SignedBeaconBlock
+	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
 	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
 	if finalizedCheckPoint != nil {
 		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
@@ -393,7 +393,7 @@ func (s *Service) onBlock(ctx context.Context, signed interfaces.ReadOnlySignedB
 	return nil
 }
 
-func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.SignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
+func (s *Service) tryPublishLightClientFinalityUpdate(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock, finalized *forkchoicetypes.Checkpoint, postState state.BeaconState) {
 	if finalized.Epoch <= s.lastPublishedLightClientEpoch {
 		return
 	}
