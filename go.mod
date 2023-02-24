@@ -41,7 +41,7 @@ require (
 	github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213
 	github.com/kr/pretty v0.3.0
 	github.com/libp2p/go-libp2p v0.26.0
-	github.com/libp2p/go-libp2p-pubsub v0.8.0
+	github.com/libp2p/go-libp2p-pubsub v0.9.1
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/manifoldco/promptui v0.7.0
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
@@ -139,7 +139,6 @@ require (
 	github.com/influxdata/influxdb-client-go/v2 v2.4.0 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20210311194329-9aa0e372d097 // indirect
 	github.com/ipfs/go-cid v0.3.2 // indirect
-	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
 	github.com/juju/ansiterm v0.0.0-20180109212912-720a0952cc2a // indirect
@@ -209,7 +208,6 @@ require (
 	github.com/tklauser/numcpus v0.5.0 // indirect
 	github.com/uber/jaeger-client-go v2.25.0+incompatible // indirect
 	github.com/wealdtech/go-eth2-types/v2 v2.5.2 // indirect
-	github.com/whyrusleeping/timecache v0.0.0-20160911033111-cfcb2f1abfee // indirect
 	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
