@@ -103,7 +103,7 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		lFirstSlotInPeriod := period * slotsPerPeriod
 
 		var state state.BeaconState
-		var block interfaces.SignedBeaconBlock
+		var block interfaces.ReadOnlySignedBeaconBlock
 		for lSlot := lLastSlotInPeriod; lSlot >= lFirstSlotInPeriod; lSlot-- {
 			state, err = bs.StateFetcher.StateBySlot(ctx, types.Slot(lSlot))
 			if err == nil {
@@ -152,7 +152,7 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		}
 
 		// Get finalized block
-		var finalizedBlock interfaces.SignedBeaconBlock
+		var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
 		finalizedCheckPoint := attestedState.FinalizedCheckpoint()
 		if finalizedCheckPoint != nil {
 			finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
@@ -226,7 +226,7 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 	}
 
 	// Get finalized block
-	var finalizedBlock interfaces.SignedBeaconBlock
+	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
 	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
 	if finalizedCheckPoint != nil {
 		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
@@ -317,7 +317,7 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 }
 
 // getLightClientEventBlock - returns the block that should be used for light client events, which satisfies the minimum number of signatures from sync committee
-func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesRequired uint64) (interfaces.SignedBeaconBlock, error) {
+func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesRequired uint64) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	// Get the current state
 	state, err := bs.HeadFetcher.HeadState(ctx)
 	if err != nil {

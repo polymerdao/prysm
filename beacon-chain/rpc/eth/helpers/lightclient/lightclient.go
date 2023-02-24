@@ -89,7 +89,7 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 	ctx context.Context,
 	config *params.BeaconChainConfig,
 	state state.BeaconState,
-	block interfaces.SignedBeaconBlock,
+	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState) (*ethpbv2.LightClientUpdate, error) {
 
 	// assert compute_epoch_at_slot(attested_state.slot) >= ALTAIR_FORK_EPOCH
@@ -183,9 +183,9 @@ func NewLightClientFinalityUpdateFromBeaconState(
 	ctx context.Context,
 	config *params.BeaconChainConfig,
 	state state.BeaconState,
-	block interfaces.SignedBeaconBlock,
+	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
-	finalizedBlock interfaces.SignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
 
 	result, err := NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
@@ -318,9 +318,9 @@ func NewLightClientUpdateFromBeaconState(
 	config *params.BeaconChainConfig,
 	slotsPerPeriod uint64,
 	state state.BeaconState,
-	block interfaces.SignedBeaconBlock,
+	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
-	finalizedBlock interfaces.SignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
 
 	result, err := NewLightClientFinalityUpdateFromBeaconState(ctx, config, state, block, attestedState,
 		finalizedBlock)
