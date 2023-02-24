@@ -73,6 +73,12 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 	startPeriod := req.StartPeriod
 	endPeriod := startPeriod + count - 1
 
+	// The end of start period must be later than Altair fork epoch, otherwise, can not get the sync committee votes
+	startPeriodEndSlot := (startPeriod+1)*slotsPerPeriod - 1
+	if startPeriodEndSlot < uint64(config.AltairForkEpoch)*uint64(config.SlotsPerEpoch) {
+		startPeriod = uint64(config.AltairForkEpoch) * uint64(config.SlotsPerEpoch) / slotsPerPeriod
+	}
+
 	headState, err := bs.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
@@ -97,10 +103,33 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		lFirstSlotInPeriod := period * slotsPerPeriod
 
 		var state state.BeaconState
+		var block interfaces.SignedBeaconBlock
 		for lSlot := lLastSlotInPeriod; lSlot >= lFirstSlotInPeriod; lSlot-- {
 			state, err = bs.StateFetcher.StateBySlot(ctx, types.Slot(lSlot))
 			if err == nil {
 				break
+			}
+
+			// Get the block
+			header := state.LatestBlockHeader()
+			blockRoot, err := header.HashTreeRoot()
+			if err != nil {
+				continue
+			}
+
+			block, err = bs.BeaconDB.Block(ctx, blockRoot)
+			if err != nil {
+				continue
+			}
+
+			syncAggregate, err := block.Block().Body().SyncAggregate()
+			if err != nil || syncAggregate == nil {
+				continue
+			}
+
+			if syncAggregate.SyncCommitteeBits.Count()*3 < config.SyncCommitteeSize*2 {
+				// Not enough votes
+				continue
 			}
 		}
 
@@ -108,14 +137,6 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 			// No valid state found for the period
 			continue
 		}
-
-		// Get the block
-		slot := state.Slot()
-		blocks, err := bs.BeaconDB.BlocksBySlot(ctx, slot)
-		if err != nil || len(blocks) == 0 {
-			continue
-		}
-		block := blocks[0]
 
 		// Get attested state
 		attestedRoot := block.Block().ParentRoot()
@@ -322,7 +343,7 @@ func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesReq
 
 	// Loop through the blocks until we find a block that has super majority of sync committee signatures (2/3)
 	var numOfSyncCommitteeSignatures uint64
-	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil && syncAggregate != nil {
 		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
 	}
 
@@ -336,7 +357,7 @@ func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesReq
 
 		// Get the number of sync committee signatures
 		numOfSyncCommitteeSignatures = 0
-		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil {
+		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil && syncAggregate != nil {
 			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
 		}
 	}
