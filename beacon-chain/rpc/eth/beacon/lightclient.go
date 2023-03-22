@@ -102,23 +102,31 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		}
 		lFirstSlotInPeriod := period * slotsPerPeriod
 
+		// Let's not use the first slot in the period, otherwise the attested header will be in previous period
+		lFirstSlotInPeriod++
+
 		var state state.BeaconState
 		var block interfaces.ReadOnlySignedBeaconBlock
 		for lSlot := lLastSlotInPeriod; lSlot >= lFirstSlotInPeriod; lSlot-- {
 			state, err = bs.StateFetcher.StateBySlot(ctx, types.Slot(lSlot))
-			if err == nil {
-				break
+			if err != nil {
+				continue
 			}
 
 			// Get the block
-			header := state.LatestBlockHeader()
-			blockRoot, err := header.HashTreeRoot()
+			latestBlockHeader := *state.LatestBlockHeader()
+			latestStateRoot, err := state.HashTreeRoot(ctx)
+			if err != nil {
+				continue
+			}
+			latestBlockHeader.StateRoot = latestStateRoot[:]
+			blockRoot, err := latestBlockHeader.HashTreeRoot()
 			if err != nil {
 				continue
 			}
 
 			block, err = bs.BeaconDB.Block(ctx, blockRoot)
-			if err != nil {
+			if err != nil || block == nil {
 				continue
 			}
 
@@ -131,10 +139,12 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 				// Not enough votes
 				continue
 			}
+
+			break
 		}
 
-		if state == nil {
-			// No valid state found for the period
+		if block == nil {
+			// No valid block found for the period
 			continue
 		}
 
