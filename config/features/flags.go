@@ -118,6 +118,10 @@ var (
 		Name:  "enable-only-blinded-beacon-blocks",
 		Usage: "Enables storing only blinded beacon blocks in the database without full execution layer transactions",
 	}
+	PolymerDevnetMode = &cli.BoolFlag{
+		Name:  "enable-polymer-devnet-mode",
+		Usage: "This will enable fast devnet chain mode for Polymer devkit",
+	}
 	enableStartupOptimistic = &cli.BoolFlag{
 		Name:   "startup-optimistic",
 		Usage:  "Treats every block as optimistically synced at launch. Use with caution",
@@ -154,6 +158,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	enableSlashingProtectionPruning,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	PolymerDevnetMode,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -170,6 +175,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	RopstenTestnet,
 	SepoliaTestnet,
 	Mainnet,
+	PolymerDevnetMode,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
 	enableSlasherFlag,

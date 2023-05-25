@@ -27,10 +27,11 @@ import (
 	"time"
 
 	"github.com/prysmaticlabs/gohashtree"
-	"github.com/prysmaticlabs/prysm/v3/cmd"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+
+	"github.com/prysmaticlabs/prysm/v3/cmd"
+	"github.com/prysmaticlabs/prysm/v3/config/params"
 )
 
 var log = logrus.WithField("prefix", "flags")
@@ -69,6 +70,8 @@ type Flags struct {
 	EnableBatchGossipAggregation      bool // EnableBatchGossipAggregation specifies whether to further aggregate our gossip batches before verifying them.
 	EnableOnlyBlindedBeaconBlocks     bool // EnableOnlyBlindedBeaconBlocks enables only storing blinded beacon blocks in the DB post-Bellatrix fork.
 	EnableStartOptimistic             bool // EnableStartOptimistic treats every block as optimistic at startup.
+
+	PolymerDevnetMode bool // A special mode for Polymer devkit
 
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 
@@ -251,6 +254,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(EnableOnlyBlindedBeaconBlocks)
 		cfg.EnableOnlyBlindedBeaconBlocks = true
 	}
+	if ctx.Bool(PolymerDevnetMode.Name) {
+		logEnabled(PolymerDevnetMode)
+		cfg.PolymerDevnetMode = true
+	}
 	if ctx.Bool(enableStartupOptimistic.Name) {
 		logEnabled(enableStartupOptimistic)
 		cfg.EnableStartOptimistic = true
@@ -301,6 +308,11 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
+	if ctx.Bool(PolymerDevnetMode.Name) {
+		logEnabled(PolymerDevnetMode)
+		cfg.PolymerDevnetMode = true
+	}
+
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)
 	return nil
