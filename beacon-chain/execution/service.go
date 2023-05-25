@@ -6,6 +6,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
 	"math/big"
 	"reflect"
 	"runtime/debug"
@@ -470,6 +471,12 @@ func (s *Service) handleETH1FollowDistance() {
 		log.Warn("Execution client is not syncing")
 	}
 	if !s.chainStartData.Chainstarted {
+		if features.Get().PolymerDevnetMode {
+			if s.latestEth1Data.LastRequestedBlock == params.BeaconNetworkConfig().ContractDeploymentBlock {
+				return
+			}
+		}
+
 		if err := s.processChainStartFromBlockNum(ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock))); err != nil {
 			s.runError = errors.Wrap(err, "processChainStartFromBlockNum")
 			log.Error(err)
@@ -620,6 +627,13 @@ func (s *Service) logTillChainStart(ctx context.Context) {
 	if s.chainStartData.Chainstarted {
 		return
 	}
+
+	if features.Get().PolymerDevnetMode {
+		if s.latestEth1Data.LastRequestedBlock == params.BeaconNetworkConfig().ContractDeploymentBlock {
+			return
+		}
+	}
+
 	_, blockTime, err := s.retrieveBlockHashAndTime(s.ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock)))
 	if err != nil {
 		log.Error(err)
