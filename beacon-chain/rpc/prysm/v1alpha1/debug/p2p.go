@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -93,7 +94,7 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 		aVersion = ""
 	}
 	peerInfo := &ethpb.DebugPeerResponse_PeerInfo{
-		Protocols:       protocols,
+		Protocols:       protocol.ConvertToStrings(protocols),
 		FaultCount:      uint64(resp),
 		ProtocolVersion: pVersion,
 		AgentVersion:    aVersion,
