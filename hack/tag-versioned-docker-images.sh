@@ -6,14 +6,14 @@
 # List of docker tags to update with git versioned tag.
 DOCKER_IMAGES=(
   # Beacon chain images
-  "gcr.io/prysmaticlabs/prysm/beacon-chain"
-  "index.docker.io/prysmaticlabs/prysm-beacon-chain"
+  "gcr.io/polymerdao/prysm/beacon-chain"
+  "index.docker.io/polymerdao/prysm-beacon-chain"
   # Validator images
-  "gcr.io/prysmaticlabs/prysm/validator"
-  "index.docker.io/prysmaticlabs/prysm-validator"
+  "gcr.io/polymerdao/prysm/validator"
+  "index.docker.io/polymerdao/prysm-validator"
   # Slasher images
-  "gcr.io/prysmaticlabs/prysm/slasher"
-  "index.docker.io/prysmaticlabs/prysm-slasher"
+  "gcr.io/polymerdao/prysm/slasher"
+  "index.docker.io/polymerdao/prysm-slasher"
 )
 
 
