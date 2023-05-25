@@ -20,6 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache/depositcache"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed"
 	statefeed "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed/state"
@@ -29,6 +31,7 @@ import (
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
 	native "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
 	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v3/config/features"
 	"github.com/prysmaticlabs/prysm/v3/config/params"
 	"github.com/prysmaticlabs/prysm/v3/container/trie"
 	contracts "github.com/prysmaticlabs/prysm/v3/contracts/deposit"
@@ -38,7 +41,6 @@ import (
 	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
 	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
 	"github.com/prysmaticlabs/prysm/v3/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -469,6 +471,12 @@ func (s *Service) handleETH1FollowDistance() {
 		log.Warn("Execution client is not syncing")
 	}
 	if !s.chainStartData.Chainstarted {
+		if features.Get().PolymerDevnetMode {
+			if s.latestEth1Data.LastRequestedBlock == params.BeaconNetworkConfig().ContractDeploymentBlock {
+				return
+			}
+		}
+
 		if err := s.processChainStartFromBlockNum(ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock))); err != nil {
 			s.runError = errors.Wrap(err, "processChainStartFromBlockNum")
 			log.Error(err)
@@ -619,6 +627,13 @@ func (s *Service) logTillChainStart(ctx context.Context) {
 	if s.chainStartData.Chainstarted {
 		return
 	}
+
+	if features.Get().PolymerDevnetMode {
+		if s.latestEth1Data.LastRequestedBlock == params.BeaconNetworkConfig().ContractDeploymentBlock {
+			return
+		}
+	}
+
 	_, blockTime, err := s.retrieveBlockHashAndTime(s.ctx, big.NewInt(int64(s.latestEth1Data.LastRequestedBlock)))
 	if err != nil {
 		log.Error(err)
