@@ -62,6 +62,7 @@ type Service struct {
 	clockSetter                   startup.ClockSetter
 	clockWaiter                   startup.ClockWaiter
 	syncComplete                  chan struct{}
+	processAttestationsLock       sync.Mutex
 	lastPublishedLightClientEpoch primitives.Epoch
 }
 
