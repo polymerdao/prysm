@@ -1,10 +1,21 @@
-name: Docker
+name: docker-prysm
 
 on:
   push:
     paths:
       - '.github/workflows/docker.yml'
       - 'Dockerfile'
+    branches:
+      - '**'
+    tags:
+      - "v*.*.*"
+    workflow_dispatch:
+      inputs:
+        build-ref:
+          description: 'The git ref to build from'
+          type: string
+          default: ''
+          required: false
 
 env:
   REGISTRY_IMAGE_PREFIX: ghcr.io/polymerdao/prysm
@@ -21,7 +32,13 @@ jobs:
           - validator
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.build-ref }}
+
+      - name: Strip Version
+        id: strip_version
+        run: echo "tag=${GITHUB_REF#refs/*/prysm-}" >> $GITHUB_OUTPUT
 
       - name: Docker meta
         id: meta
@@ -31,6 +48,12 @@ jobs:
             ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.binary }}
           tags: |
             type=sha
+            type=semver,pattern={{steps.strip_version.outputs.tag}}
+          labels: |
+            org.opencontainers.image.source=https://github.com/polymerdao/ibc-sdk
+            org.opencontainers.image.title=prysm
+            org.opencontainers.image.url=https://github.com/polymerdao/ibc-sdk
+
 
       - name: Authenticate Docker
         uses: docker/login-action@v2
