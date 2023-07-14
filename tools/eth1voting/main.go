@@ -4,14 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	v1alpha1 "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	v1alpha1 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
@@ -25,13 +26,13 @@ func main() {
 	flag.Parse()
 	ctx := context.Background()
 
-	cc, err := grpc.DialContext(ctx, *beacon, grpc.WithInsecure())
+	cc, err := grpc.DialContext(ctx, *beacon, grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(math.MaxInt64)))
 	if err != nil {
 		panic(err)
 	}
 	c := v1alpha1.NewBeaconChainClient(cc)
 	g, ctx := errgroup.WithContext(ctx)
-	v := NewVotes()
+	v := newVotes()
 
 	current := slots.ToEpoch(slots.CurrentSlot(*genesis))
 	start := current.Div(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod)).Mul(uint64(params.BeaconConfig().EpochsPerEth1VotingPeriod))
@@ -82,6 +83,8 @@ func wrapBlock(b *v1alpha1.BeaconBlockContainer) interfaces.ReadOnlyBeaconBlock 
 		wb, err = blocks.NewSignedBeaconBlock(bb.AltairBlock)
 	case *v1alpha1.BeaconBlockContainer_BellatrixBlock:
 		wb, err = blocks.NewSignedBeaconBlock(bb.BellatrixBlock)
+	case *v1alpha1.BeaconBlockContainer_CapellaBlock:
+		wb, err = blocks.NewSignedBeaconBlock(bb.CapellaBlock)
 	}
 	if err != nil {
 		panic("no block")

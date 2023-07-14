@@ -6,26 +6,26 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/async"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/signing"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v3/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	validatorpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
-	"github.com/prysmaticlabs/prysm/v3/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v4/async"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v4/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	validatorpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const domainDataErr = "could not get domain data"
@@ -132,7 +132,7 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 	}
 	blkResp, err := v.validatorClient.ProposeBeaconBlock(ctx, proposal)
 	if err != nil {
-		log.WithError(err).Error("Failed to propose block")
+		log.WithField("blockSlot", slot).WithError(err).Error("Failed to propose block")
 		if v.emitAccountMetrics {
 			ValidatorProposeFailVec.WithLabelValues(fmtKey).Inc()
 		}
@@ -198,31 +198,17 @@ func (v *validator) ProposeBlock(ctx context.Context, slot primitives.Slot, pubK
 func ProposeExit(
 	ctx context.Context,
 	validatorClient iface.ValidatorClient,
-	nodeClient ethpb.NodeClient,
 	signer iface.SigningFunc,
 	pubKey []byte,
+	epoch primitives.Epoch,
 ) error {
 	ctx, span := trace.StartSpan(ctx, "validator.ProposeExit")
 	defer span.End()
 
-	indexResponse, err := validatorClient.ValidatorIndex(ctx, &ethpb.ValidatorIndexRequest{PublicKey: pubKey})
+	signedExit, err := CreateSignedVoluntaryExit(ctx, validatorClient, signer, pubKey, epoch)
 	if err != nil {
-		return errors.Wrap(err, "gRPC call to get validator index failed")
+		return errors.Wrap(err, "failed to create signed voluntary exit")
 	}
-	genesisResponse, err := nodeClient.GetGenesis(ctx, &emptypb.Empty{})
-	if err != nil {
-		return errors.Wrap(err, "gRPC call to get genesis time failed")
-	}
-	totalSecondsPassed := prysmTime.Now().Unix() - genesisResponse.GenesisTime.Seconds
-	currentEpoch := primitives.Epoch(uint64(totalSecondsPassed) / uint64(params.BeaconConfig().SlotsPerEpoch.Mul(params.BeaconConfig().SecondsPerSlot)))
-	currentSlot := slots.CurrentSlot(uint64(genesisResponse.GenesisTime.AsTime().Unix()))
-	exit := &ethpb.VoluntaryExit{Epoch: currentEpoch, ValidatorIndex: indexResponse.Index}
-	sig, err := signVoluntaryExit(ctx, validatorClient, signer, pubKey, exit, currentSlot)
-	if err != nil {
-		return errors.Wrap(err, "failed to sign voluntary exit")
-	}
-
-	signedExit := &ethpb.SignedVoluntaryExit{Exit: exit, Signature: sig}
 	exitResp, err := validatorClient.ProposeExit(ctx, signedExit)
 	if err != nil {
 		return errors.Wrap(err, "failed to propose voluntary exit")
@@ -231,8 +217,41 @@ func ProposeExit(
 	span.AddAttributes(
 		trace.StringAttribute("exitRoot", fmt.Sprintf("%#x", exitResp.ExitRoot)),
 	)
-
 	return nil
+}
+
+func CurrentEpoch(genesisTime *timestamp.Timestamp) (primitives.Epoch, error) {
+	totalSecondsPassed := prysmTime.Now().Unix() - genesisTime.Seconds
+	currentSlot := primitives.Slot((uint64(totalSecondsPassed)) / params.BeaconConfig().SecondsPerSlot)
+	currentEpoch := slots.ToEpoch(currentSlot)
+	return currentEpoch, nil
+}
+
+func CreateSignedVoluntaryExit(
+	ctx context.Context,
+	validatorClient iface.ValidatorClient,
+	signer iface.SigningFunc,
+	pubKey []byte,
+	epoch primitives.Epoch,
+) (*ethpb.SignedVoluntaryExit, error) {
+	ctx, span := trace.StartSpan(ctx, "validator.CreateSignedVoluntaryExit")
+	defer span.End()
+
+	indexResponse, err := validatorClient.ValidatorIndex(ctx, &ethpb.ValidatorIndexRequest{PublicKey: pubKey})
+	if err != nil {
+		return nil, errors.Wrap(err, "gRPC call to get validator index failed")
+	}
+	exit := &ethpb.VoluntaryExit{Epoch: epoch, ValidatorIndex: indexResponse.Index}
+	slot, err := slots.EpochStart(epoch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to retrieve slot")
+	}
+	sig, err := signVoluntaryExit(ctx, validatorClient, signer, pubKey, exit, slot)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to sign voluntary exit")
+	}
+
+	return &ethpb.SignedVoluntaryExit{Exit: exit, Signature: sig}, nil
 }
 
 // Sign randao reveal with randao domain and private key.

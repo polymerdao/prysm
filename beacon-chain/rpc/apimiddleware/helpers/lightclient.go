@@ -9,12 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	ethrpc "github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/apimiddleware"
-	v11 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
+	ethrpc "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
+	v11 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
 
-	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
+	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 )
 
 func bytesFromBigInt(numStr string) ([]byte, error) {

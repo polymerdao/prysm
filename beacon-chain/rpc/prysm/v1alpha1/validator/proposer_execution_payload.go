@@ -9,22 +9,23 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	payloadattribute "github.com/prysmaticlabs/prysm/v3/consensus-types/payload-attribute"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	payloadattribute "github.com/prysmaticlabs/prysm/v4/consensus-types/payload-attribute"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"github.com/sirupsen/logrus"
+	"go.opencensus.io/trace"
 )
 
 var (
@@ -42,7 +43,17 @@ var (
 
 // This returns the execution payload of a given slot. The function has full awareness of pre and post merge.
 // The payload is computed given the respected time of merge.
-func (vs *Server) getExecutionPayload(ctx context.Context, slot primitives.Slot, vIdx primitives.ValidatorIndex, headRoot [32]byte, st state.BeaconState) (interfaces.ExecutionData, error) {
+func (vs *Server) getLocalPayload(ctx context.Context, blk interfaces.ReadOnlyBeaconBlock, st state.BeaconState) (interfaces.ExecutionData, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.getLocalPayload")
+	defer span.End()
+
+	if blk.Version() < version.Bellatrix {
+		return nil, nil
+	}
+
+	slot := blk.Slot()
+	vIdx := blk.ProposerIndex()
+	headRoot := blk.ParentRoot()
 	proposerID, payloadId, ok := vs.ProposerSlotIndexCache.GetProposerPayloadIDs(slot, headRoot)
 	feeRecipient := params.BeaconConfig().DefaultFeeRecipient
 	recipient, err := vs.BeaconDB.FeeRecipientByValidatorID(ctx, vIdx)
@@ -115,31 +126,19 @@ func (vs *Server) getExecutionPayload(ctx context.Context, slot primitives.Slot,
 	if err != nil {
 		return nil, err
 	}
-	finalizedBlockHash := params.BeaconConfig().ZeroHash[:]
-	finalizedRoot := bytesutil.ToBytes32(st.FinalizedCheckpoint().Root)
-	if finalizedRoot != [32]byte{} { // finalized root could be zeros before the first finalized block.
-		finalizedBlock, err := vs.BeaconDB.Block(ctx, bytesutil.ToBytes32(st.FinalizedCheckpoint().Root))
-		if err != nil {
-			return nil, err
-		}
-		if err := consensusblocks.BeaconBlockIsNil(finalizedBlock); err != nil {
-			return nil, err
-		}
-		switch finalizedBlock.Version() {
-		case version.Phase0, version.Altair: // Blocks before Bellatrix don't have execution payloads. Use zeros as the hash.
-		default:
-			finalizedPayload, err := finalizedBlock.Block().Body().Execution()
-			if err != nil {
-				return nil, err
-			}
-			finalizedBlockHash = finalizedPayload.BlockHash()
-		}
+
+	finalizedBlockHash := [32]byte{}
+	justifiedBlockHash := [32]byte{}
+	// Blocks before Bellatrix don't have execution payloads. Use zeros as the hash.
+	if st.Version() >= version.Altair {
+		finalizedBlockHash = vs.FinalizationFetcher.FinalizedBlockHash()
+		justifiedBlockHash = vs.FinalizationFetcher.UnrealizedJustifiedPayloadBlockHash()
 	}
 
 	f := &enginev1.ForkchoiceState{
 		HeadBlockHash:      parentHash,
-		SafeBlockHash:      finalizedBlockHash,
-		FinalizedBlockHash: finalizedBlockHash,
+		SafeBlockHash:      justifiedBlockHash[:],
+		FinalizedBlockHash: finalizedBlockHash[:],
 	}
 	var attr payloadattribute.Attributer
 	switch st.Version() {
@@ -227,6 +226,27 @@ func (vs *Server) getTerminalBlockHashIfExists(ctx context.Context, transitionTi
 	}
 
 	return vs.ExecutionEngineCaller.GetTerminalBlockHash(ctx, transitionTime)
+}
+
+func (vs *Server) getBuilderPayload(ctx context.Context,
+	slot primitives.Slot,
+	vIdx primitives.ValidatorIndex) (interfaces.ExecutionData, error) {
+	ctx, span := trace.StartSpan(ctx, "ProposerServer.getBuilderPayload")
+	defer span.End()
+
+	if slots.ToEpoch(slot) < params.BeaconConfig().BellatrixForkEpoch {
+		return nil, nil
+	}
+	canUseBuilder, err := vs.canUseBuilder(ctx, slot, vIdx)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to check if we can use the builder")
+	}
+	span.AddAttributes(trace.BoolAttribute("canUseBuilder", canUseBuilder))
+	if !canUseBuilder {
+		return nil, nil
+	}
+
+	return vs.getPayloadHeaderFromBuilder(ctx, slot, vIdx)
 }
 
 // activationEpochNotReached returns true if activation epoch has not been reach.

@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	enginev1 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
-	v1alpha1 "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
+	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
+	v1alpha1 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
 )
 
 func TestCopyETH1Data(t *testing.T) {
@@ -451,14 +451,8 @@ func TestCopyBlindedBeaconBlockBodyCapella(t *testing.T) {
 
 func bytes(length int) []byte {
 	b := make([]byte, length)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic(err)
-	}
 	for i := 0; i < length; i++ {
-		if b[i] == 0x00 {
-			b[i] = uint8(rand.Int())
-		}
+		b[i] = uint8(rand.Int31n(255) + 1)
 	}
 	return b
 }

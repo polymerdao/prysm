@@ -6,21 +6,21 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v3/math"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/math"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 )
@@ -28,6 +28,8 @@ import (
 // UpdateAndSaveHeadWithBalances updates the beacon state head after getting justified balanced from cache.
 // This function is only used in spec-tests, it does save the head after updating it.
 func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 	headRoot, err := s.cfg.ForkChoiceStore.Head(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not update head")
@@ -45,13 +47,16 @@ func (s *Service) UpdateAndSaveHeadWithBalances(ctx context.Context) error {
 
 // This defines the current chain service's view of head.
 type head struct {
-	root  [32]byte                             // current head root.
-	block interfaces.ReadOnlySignedBeaconBlock // current head block.
-	state state.BeaconState                    // current head state.
+	root       [32]byte                             // current head root.
+	block      interfaces.ReadOnlySignedBeaconBlock // current head block.
+	state      state.BeaconState                    // current head state.
+	slot       primitives.Slot                      // the head block slot number
+	optimistic bool                                 // optimistic status when saved head
 }
 
 // This saves head info to the local service cache, it also saves the
 // new head root to the DB.
+// Caller of the method MUST acquire a lock on forkchoice.
 func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock interfaces.ReadOnlySignedBeaconBlock, headState state.BeaconState) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.saveHead")
 	defer span.End()
@@ -86,25 +91,29 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	newHeadSlot := headBlock.Block().Slot()
 	newStateRoot := headBlock.Block().StateRoot()
 
-	// A chain re-org occurred, so we fire an event notifying the rest of the services.
 	r, err := s.HeadRoot(ctx)
 	if err != nil {
 		return errors.Wrap(err, "could not get old head root")
 	}
 	oldHeadRoot := bytesutil.ToBytes32(r)
+	isOptimistic, err := s.cfg.ForkChoiceStore.IsOptimistic(newHeadRoot)
+	if err != nil {
+		log.WithError(err).Error("could not check if node is optimistically synced")
+	}
 	if headBlock.Block().ParentRoot() != oldHeadRoot {
-		commonRoot, forkSlot, err := s.ForkChoicer().CommonAncestor(ctx, oldHeadRoot, newHeadRoot)
+		// A chain re-org occurred, so we fire an event notifying the rest of the services.
+		commonRoot, forkSlot, err := s.cfg.ForkChoiceStore.CommonAncestor(ctx, oldHeadRoot, newHeadRoot)
 		if err != nil {
 			log.WithError(err).Error("Could not find common ancestor root")
 			commonRoot = params.BeaconConfig().ZeroHash
 		}
 		dis := headSlot + newHeadSlot - 2*forkSlot
 		dep := math.Max(uint64(headSlot-forkSlot), uint64(newHeadSlot-forkSlot))
-		oldWeight, err := s.ForkChoicer().Weight(oldHeadRoot)
+		oldWeight, err := s.cfg.ForkChoiceStore.Weight(oldHeadRoot)
 		if err != nil {
 			log.WithField("root", fmt.Sprintf("%#x", oldHeadRoot)).Warn("could not determine node weight")
 		}
-		newWeight, err := s.ForkChoicer().Weight(newHeadRoot)
+		newWeight, err := s.cfg.ForkChoiceStore.Weight(newHeadRoot)
 		if err != nil {
 			log.WithField("root", fmt.Sprintf("%#x", newHeadRoot)).Warn("could not determine node weight")
 		}
@@ -122,10 +131,6 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 		reorgDistance.Observe(float64(dis))
 		reorgDepth.Observe(float64(dep))
 
-		isOptimistic, err := s.IsOptimistic(ctx)
-		if err != nil {
-			return errors.Wrap(err, "could not check if node is optimistically synced")
-		}
 		s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
 			Type: statefeed.Reorg,
 			Data: &ethpbv1.EventChainReorg{
@@ -147,7 +152,14 @@ func (s *Service) saveHead(ctx context.Context, newHeadRoot [32]byte, headBlock 
 	}
 
 	// Cache the new head info.
-	if err := s.setHead(newHeadRoot, headBlock, headState); err != nil {
+	newHead := &head{
+		root:       newHeadRoot,
+		block:      headBlock,
+		state:      headState,
+		optimistic: isOptimistic,
+		slot:       headBlock.Block().Slot(),
+	}
+	if err := s.setHead(newHead); err != nil {
 		return errors.Wrap(err, "could not set head")
 	}
 
@@ -192,20 +204,22 @@ func (s *Service) saveHeadNoDB(ctx context.Context, b interfaces.ReadOnlySignedB
 	return nil
 }
 
-// This sets head view object which is used to track the head slot, root, block and state.
-func (s *Service) setHead(root [32]byte, block interfaces.ReadOnlySignedBeaconBlock, state state.BeaconState) error {
+// This sets head view object which is used to track the head slot, root, block, state and optimistic status
+func (s *Service) setHead(newHead *head) error {
 	s.headLock.Lock()
 	defer s.headLock.Unlock()
 
 	// This does a full copy of the block and state.
-	bCp, err := block.Copy()
+	bCp, err := newHead.block.Copy()
 	if err != nil {
 		return err
 	}
 	s.head = &head{
-		root:  root,
-		block: bCp,
-		state: state.Copy(),
+		root:       newHead.root,
+		block:      bCp,
+		state:      newHead.state.Copy(),
+		optimistic: newHead.optimistic,
+		slot:       newHead.slot,
 	}
 	return nil
 }
@@ -362,7 +376,7 @@ func (s *Service) notifyNewHeadEvent(
 // This saves the Attestations and BLSToExecChanges between `orphanedRoot` and the common ancestor root that is derived using `newHeadRoot`.
 // It also filters out the attestations that is one epoch older as a defense so invalid attestations don't flow into the attestation pool.
 func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]byte, newHeadRoot [32]byte) error {
-	commonAncestorRoot, _, err := s.ForkChoicer().CommonAncestor(ctx, newHeadRoot, orphanedRoot)
+	commonAncestorRoot, _, err := s.cfg.ForkChoiceStore.CommonAncestor(ctx, newHeadRoot, orphanedRoot)
 	switch {
 	// Exit early if there's no common ancestor and root doesn't exist, there would be nothing to save.
 	case errors.Is(err, forkchoice.ErrUnknownCommonAncestor):
@@ -399,6 +413,19 @@ func (s *Service) saveOrphanedOperations(ctx context.Context, orphanedRoot [32]b
 				}
 			}
 			saveOrphanedAttCount.Inc()
+		}
+		for _, as := range orphanedBlk.Block().Body().AttesterSlashings() {
+			if err := s.cfg.SlashingPool.InsertAttesterSlashing(ctx, s.headStateReadOnly(ctx), as); err != nil {
+				log.WithError(err).Error("Could not insert reorg attester slashing")
+			}
+		}
+		for _, vs := range orphanedBlk.Block().Body().ProposerSlashings() {
+			if err := s.cfg.SlashingPool.InsertProposerSlashing(ctx, s.headStateReadOnly(ctx), vs); err != nil {
+				log.WithError(err).Error("Could not insert reorg proposer slashing")
+			}
+		}
+		for _, v := range orphanedBlk.Block().Body().VoluntaryExits() {
+			s.cfg.ExitPool.InsertVoluntaryExit(v)
 		}
 		if orphanedBlk.Version() >= version.Capella {
 			changes, err := orphanedBlk.Block().Body().BLSToExecutionChanges()

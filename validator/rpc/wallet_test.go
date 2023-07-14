@@ -9,21 +9,21 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v3/async/event"
-	"github.com/prysmaticlabs/prysm/v3/config/features"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v3/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v3/io/file"
-	ethpbservice "github.com/prysmaticlabs/prysm/v3/proto/eth/service"
-	pb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1/validator-client"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts/iface"
-	mock "github.com/prysmaticlabs/prysm/v3/validator/accounts/testing"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v3/validator/client"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v4/async/event"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v4/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v4/io/file"
+	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
+	pb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/validator-client"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
+	mock "github.com/prysmaticlabs/prysm/v4/validator/accounts/testing"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v4/validator/client"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
 	"github.com/tyler-smith/go-bip39"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -92,11 +92,11 @@ func TestServer_CreateWallet_Local(t *testing.T) {
 		cryptoFields, err := encryptor.Encrypt(privKey.Marshal(), strongPass)
 		require.NoError(t, err)
 		item := &keymanager.Keystore{
-			Crypto:  cryptoFields,
-			ID:      id.String(),
-			Version: encryptor.Version(),
-			Pubkey:  pubKey,
-			Name:    encryptor.Name(),
+			Crypto:      cryptoFields,
+			ID:          id.String(),
+			Version:     encryptor.Version(),
+			Pubkey:      pubKey,
+			Description: encryptor.Name(),
 		}
 		encodedFile, err := json.MarshalIndent(item, "", "\t")
 		require.NoError(t, err)
@@ -241,11 +241,11 @@ func TestServer_ValidateKeystores_OK(t *testing.T) {
 		cryptoFields, err := encryptor.Encrypt(privKey.Marshal(), strongPass)
 		require.NoError(t, err)
 		item := &keymanager.Keystore{
-			Crypto:  cryptoFields,
-			ID:      id.String(),
-			Version: encryptor.Version(),
-			Pubkey:  pubKey,
-			Name:    encryptor.Name(),
+			Crypto:      cryptoFields,
+			ID:          id.String(),
+			Version:     encryptor.Version(),
+			Pubkey:      pubKey,
+			Description: encryptor.Name(),
 		}
 		encodedFile, err := json.MarshalIndent(item, "", "\t")
 		require.NoError(t, err)
@@ -278,11 +278,11 @@ func TestServer_ValidateKeystores_OK(t *testing.T) {
 	cryptoFields, err := encryptor.Encrypt(privKey.Marshal(), differentPassword)
 	require.NoError(t, err)
 	item := &keymanager.Keystore{
-		Crypto:  cryptoFields,
-		ID:      id.String(),
-		Version: encryptor.Version(),
-		Pubkey:  pubKey,
-		Name:    encryptor.Name(),
+		Crypto:      cryptoFields,
+		ID:          id.String(),
+		Version:     encryptor.Version(),
+		Pubkey:      pubKey,
+		Description: encryptor.Name(),
 	}
 	encodedFile, err := json.MarshalIndent(item, "", "\t")
 	keystores = append(keystores, string(encodedFile))

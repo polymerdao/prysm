@@ -7,16 +7,17 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	log "github.com/sirupsen/logrus"
+	"go.opencensus.io/trace"
 )
 
 var CommitteeCacheInProgressHit = promauto.NewCounter(prometheus.CounterOpts{
@@ -261,7 +262,7 @@ func BeaconProposerIndex(ctx context.Context, state state.ReadOnlyBeaconState) (
 				}
 				return proposerIndices[state.Slot()%params.BeaconConfig().SlotsPerEpoch], nil
 			}
-			if err := UpdateProposerIndicesInCache(ctx, state); err != nil {
+			if err := UpdateProposerIndicesInCache(ctx, state, time.CurrentEpoch(state)); err != nil {
 				return 0, errors.Wrap(err, "could not update committee cache")
 			}
 		}
@@ -285,6 +286,7 @@ func BeaconProposerIndex(ctx context.Context, state state.ReadOnlyBeaconState) (
 
 // ComputeProposerIndex returns the index sampled by effective balance, which is used to calculate proposer.
 //
+// nolint:dupword
 // Spec pseudocode definition:
 //
 //	def compute_proposer_index(state: BeaconState, indices: Sequence[ValidatorIndex], seed: Bytes32) -> ValidatorIndex:
@@ -394,4 +396,23 @@ func IsEligibleForActivationUsingTrie(state state.ReadOnlyCheckpoint, validator 
 func isEligibleForActivation(activationEligibilityEpoch, activationEpoch, finalizedEpoch primitives.Epoch) bool {
 	return activationEligibilityEpoch <= finalizedEpoch &&
 		activationEpoch == params.BeaconConfig().FarFutureEpoch
+}
+
+// LastActivatedValidatorIndex provides the last activated validator given a state
+func LastActivatedValidatorIndex(ctx context.Context, st state.ReadOnlyBeaconState) (primitives.ValidatorIndex, error) {
+	_, span := trace.StartSpan(ctx, "helpers.LastActivatedValidatorIndex")
+	defer span.End()
+	var lastActivatedvalidatorIndex primitives.ValidatorIndex
+	// linear search because status are not sorted
+	for j := st.NumValidators() - 1; j >= 0; j-- {
+		val, err := st.ValidatorAtIndexReadOnly(primitives.ValidatorIndex(j))
+		if err != nil {
+			return 0, err
+		}
+		if IsActiveValidatorUsingTrie(val, time.CurrentEpoch(st)) {
+			lastActivatedvalidatorIndex = primitives.ValidatorIndex(j)
+			break
+		}
+	}
+	return lastActivatedvalidatorIndex, nil
 }

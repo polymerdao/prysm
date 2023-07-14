@@ -11,16 +11,20 @@ import (
 	"testing"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/io/file"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/io/file"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
 	"gopkg.in/yaml.v2"
 )
 
 // Variables defined in the placeholderFields will not be tested in `TestLoadConfigFile`.
 // These are variables that we don't use in Prysm. (i.e. future hardfork, light client... etc)
-var placeholderFields = []string{"UPDATE_TIMEOUT", "DENEB_FORK_EPOCH", "DENEB_FORK_VERSION"}
+var placeholderFields = []string{"UPDATE_TIMEOUT", "DENEB_FORK_EPOCH", "DENEB_FORK_VERSION",
+	"ATTESTATION_SUBNET_EXTRA_BITS", "RESP_TIMEOUT", "MAX_REQUEST_BLOCKS", "EPOCHS_PER_SUBNET_SUBSCRIPTION",
+	"EIP6110_FORK_EPOCH", "MESSAGE_DOMAIN_INVALID_SNAPPY", "MIN_EPOCHS_FOR_BLOCK_REQUESTS", "MAXIMUM_GOSSIP_CLOCK_DISPARITY",
+	"MESSAGE_DOMAIN_VALID_SNAPPY", "GOSSIP_MAX_SIZE", "SUBNETS_PER_NODE", "ATTESTATION_SUBNET_COUNT",
+	"MAX_CHUNK_SIZE", "ATTESTATION_PROPAGATION_SLOT_RANGE", "ATTESTATION_SUBNET_PREFIX_BITS", "EIP6110_FORK_VERSION", "TTFB_TIMEOUT"}
 
 func assertEqualConfigs(t *testing.T, name string, fields []string, expected, actual *params.BeaconChainConfig) {
 	//  Misc params.
@@ -37,7 +41,7 @@ func assertEqualConfigs(t *testing.T, name string, fields []string, expected, ac
 	assert.Equal(t, expected.HysteresisUpwardMultiplier, actual.HysteresisUpwardMultiplier, "%s: HysteresisUpwardMultiplier", name)
 
 	// Fork Choice params.
-	assert.Equal(t, expected.SafeSlotsToUpdateJustified, actual.SafeSlotsToUpdateJustified, "%s: SafeSlotsToUpdateJustified", name)
+	assert.Equal(t, expected.DeprecatedSafeSlotsToUpdateJustified, actual.DeprecatedSafeSlotsToUpdateJustified, "%s: SafeSlotsToUpdateJustified", name)
 
 	// Validator params.
 	assert.Equal(t, expected.Eth1FollowDistance, actual.Eth1FollowDistance, "%s: Eth1FollowDistance", name)

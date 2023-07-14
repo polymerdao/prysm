@@ -6,19 +6,23 @@ package stategen
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/db"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/sync/backfill"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/sync/backfill"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
 	"go.opencensus.io/trace"
 )
 
 var defaultHotStateDBInterval primitives.Slot = 128
+
+var populatePubkeyCacheOnce sync.Once
 
 // StateManager represents a management object that handles the internal
 // logic of maintaining both hot and cold states in DB.
@@ -96,6 +100,8 @@ func New(beaconDB db.NoHeadAccessDatabase, fc forkchoice.ForkChoicer, opts ...St
 	for _, o := range opts {
 		o(s)
 	}
+	fc.Lock()
+	defer fc.Unlock()
 	fc.SetBalancesByRooter(s.ActiveNonSlashedBalancesByRoot)
 	return s
 }
@@ -135,6 +141,24 @@ func (s *State) Resume(ctx context.Context, fState state.BeaconState) (state.Bea
 	}()
 
 	s.finalizedInfo = &finalizedInfo{slot: fState.Slot(), root: fRoot, state: fState.Copy()}
+
+	// Pre-populate the pubkey cache with the validator public keys from the finalized state.
+	// This process takes about 30 seconds on mainnet with 450,000 validators.
+	go populatePubkeyCacheOnce.Do(func() {
+		log.Debug("Populating pubkey cache")
+		start := time.Now()
+		if err := fState.ReadFromEveryValidator(func(_ int, val state.ReadOnlyValidator) error {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			pub := val.PublicKey()
+			_, err := bls.PublicKeyFromBytes(pub[:])
+			return err
+		}); err != nil {
+			log.WithError(err).Error("Failed to populate pubkey cache")
+		}
+		log.WithField("duration", time.Since(start)).Debug("Done populating pubkey cache")
+	})
 
 	return fState, nil
 }

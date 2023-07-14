@@ -7,10 +7,10 @@
 package eth
 
 import (
-	_ "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
-	github_com_prysmaticlabs_prysm_v3_consensus_types_primitives "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	_ "github.com/prysmaticlabs/prysm/v3/proto/eth/ext"
-	v1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
+	_ "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
+	github_com_prysmaticlabs_prysm_v4_consensus_types_primitives "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	_ "github.com/prysmaticlabs/prysm/v4/proto/eth/ext"
+	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -357,7 +357,7 @@ type LightClientUpdate struct {
 	FinalizedHeader         *v1.BeaconBlockHeader                                             `protobuf:"bytes,4,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch          [][]byte                                                          `protobuf:"bytes,5,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate           *v1.SyncAggregate                                                 `protobuf:"bytes,6,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot           github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives.Slot"`
+	SignatureSlot           github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot `protobuf:"varint,7,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Slot"`
 }
 
 func (x *LightClientUpdate) Reset() {
@@ -434,11 +434,11 @@ func (x *LightClientUpdate) GetSyncAggregate() *v1.SyncAggregate {
 	return nil
 }
 
-func (x *LightClientUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot {
+func (x *LightClientUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.SignatureSlot
 	}
-	return github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot(0)
+	return github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot(0)
 }
 
 type LightClientFinalityUpdateResponse struct {
@@ -505,7 +505,7 @@ type LightClientFinalityUpdate struct {
 	FinalizedHeader *v1.BeaconBlockHeader                                             `protobuf:"bytes,2,opt,name=finalized_header,json=finalizedHeader,proto3" json:"finalized_header,omitempty"`
 	FinalityBranch  [][]byte                                                          `protobuf:"bytes,3,rep,name=finality_branch,json=finalityBranch,proto3" json:"finality_branch,omitempty" ssz-size:"6,32"`
 	SyncAggregate   *v1.SyncAggregate                                                 `protobuf:"bytes,4,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot   github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives.Slot"`
+	SignatureSlot   github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot `protobuf:"varint,5,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives.Slot"`
 }
 
 func (x *LightClientFinalityUpdate) Reset() {
@@ -568,11 +568,11 @@ func (x *LightClientFinalityUpdate) GetSyncAggregate() *v1.SyncAggregate {
 	return nil
 }
 
-func (x *LightClientFinalityUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot {
+func (x *LightClientFinalityUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.SignatureSlot
 	}
-	return github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot(0)
+	return github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot(0)
 }
 
 type LightClientOptimisticUpdateResponse struct {
@@ -637,7 +637,7 @@ type LightClientOptimisticUpdate struct {
 
 	AttestedHeader *v1.BeaconBlockHeader                                             `protobuf:"bytes,1,opt,name=attested_header,json=attestedHeader,proto3" json:"attested_header,omitempty"`
 	SyncAggregate  *v1.SyncAggregate                                                 `protobuf:"bytes,2,opt,name=sync_aggregate,json=syncAggregate,proto3" json:"sync_aggregate,omitempty"`
-	SignatureSlot  github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives.Slot"`
+	SignatureSlot  github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot `protobuf:"varint,3,opt,name=signature_slot,json=signatureSlot,proto3" json:"signature_slot,omitempty" cast-type:"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Slot"`
 }
 
 func (x *LightClientOptimisticUpdate) Reset() {
@@ -686,11 +686,11 @@ func (x *LightClientOptimisticUpdate) GetSyncAggregate() *v1.SyncAggregate {
 	return nil
 }
 
-func (x *LightClientOptimisticUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot {
+func (x *LightClientOptimisticUpdate) GetSignatureSlot() github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot {
 	if x != nil {
 		return x.SignatureSlot
 	}
-	return github_com_prysmaticlabs_prysm_v3_consensus_types_primitives.Slot(0)
+	return github_com_prysmaticlabs_prysm_v4_consensus_types_primitives.Slot(0)
 }
 
 var File_proto_eth_v2_beacon_lightclient_proto protoreflect.FileDescriptor

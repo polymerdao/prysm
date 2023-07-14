@@ -15,8 +15,8 @@ var (
 	errNilFinalizedCheckpoint = errors.New("nil finalized checkpoint returned from state")
 	// errNilJustifiedCheckpoint is returned when a nil justified checkpt is returned from a state.
 	errNilJustifiedCheckpoint = errors.New("nil justified checkpoint returned from state")
-	// errInvalidNilSummary is returned when a nil summary is returned from the DB.
-	errInvalidNilSummary = errors.New("nil summary returned from the DB")
+	// errBlockDoesNotExist is returned when a block does not exist for a particular state summary.
+	errBlockDoesNotExist = errors.New("could not find block in DB")
 	// errWrongBlockCount is returned when the wrong number of blocks or block roots is used
 	errWrongBlockCount = errors.New("wrong number of blocks or block roots")
 	// errBlockNotFoundInCacheOrDB is returned when a block is not found in the cache or DB.
@@ -25,8 +25,11 @@ var (
 	errWSBlockNotFound = errors.New("weak subjectivity root not found in db")
 	// errWSBlockNotFoundInEpoch is returned when a block is not found in the WS cache or DB within epoch.
 	errWSBlockNotFoundInEpoch = errors.New("weak subjectivity root not found in db within epoch")
-	// errNotDescendantOfFinalized is returned when a block is not a descendant of the finalized checkpoint
-	errNotDescendantOfFinalized = invalidBlock{error: errors.New("not descendant of finalized checkpoint")}
+	// ErrNotDescendantOfFinalized is returned when a block is not a descendant of the finalized checkpoint
+	ErrNotDescendantOfFinalized = invalidBlock{error: errors.New("not descendant of finalized checkpoint")}
+	// ErrNotCheckpoint is returned when a given checkpoint is not a
+	// checkpoint in any chain known to forkchoice
+	ErrNotCheckpoint = errors.New("not a checkpoint in forkchoice")
 )
 
 // An invalid block is the block that fails state transition based on the core protocol rules.
@@ -38,18 +41,25 @@ var (
 type invalidBlock struct {
 	invalidAncestorRoots [][32]byte
 	error
-	root [32]byte
+	root          [32]byte
+	lastValidHash [32]byte
 }
 
 type invalidBlockError interface {
 	Error() string
 	InvalidAncestorRoots() [][32]byte
 	BlockRoot() [32]byte
+	LastValidHash() [32]byte
 }
 
 // BlockRoot returns the invalid block root.
 func (e invalidBlock) BlockRoot() [32]byte {
 	return e.root
+}
+
+// LastValidHash returns the last valid hash root.
+func (e invalidBlock) LastValidHash() [32]byte {
+	return e.lastValidHash
 }
 
 // InvalidAncestorRoots returns an optional list of invalid roots of the invalid block which leads up last valid root.
@@ -67,6 +77,19 @@ func IsInvalidBlock(e error) bool {
 		return IsInvalidBlock(errors.Unwrap(e))
 	}
 	return true
+}
+
+// InvalidBlockLVH returns the invalid block last valid hash root. If the error
+// doesn't have a last valid hash, [32]byte{} is returned.
+func InvalidBlockLVH(e error) [32]byte {
+	if e == nil {
+		return [32]byte{}
+	}
+	d, ok := e.(invalidBlockError)
+	if !ok {
+		return [32]byte{}
+	}
+	return d.LastValidHash()
 }
 
 // InvalidBlockRoot returns the invalid block root. If the error

@@ -2,9 +2,9 @@ package synccommittee
 
 import (
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/container/queue"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/container/queue"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
 )
 
 // SaveSyncCommitteeMessage saves a sync committee message in to a priority queue.
@@ -30,8 +30,22 @@ func (s *Store) SaveSyncCommitteeMessage(msg *ethpb.SyncCommitteeMessage) error 
 			return errors.New("not typed []ethpb.SyncCommitteeMessage")
 		}
 
-		messages = append(messages, copied)
-		savedSyncCommitteeMessageTotal.Inc()
+		idx := -1
+		for i, msg := range messages {
+			if msg.ValidatorIndex == copied.ValidatorIndex {
+				idx = i
+				break
+			}
+		}
+		if idx >= 0 {
+			// Override the existing messages with a new one
+			messages[idx] = copied
+		} else {
+			// Append the new message
+			messages = append(messages, copied)
+			savedSyncCommitteeMessageTotal.Inc()
+		}
+
 		return s.messageCache.Push(&queue.Item{
 			Key:      syncCommitteeKey(msg.Slot),
 			Value:    messages,

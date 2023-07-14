@@ -8,17 +8,17 @@ import (
 	"errors"
 	"fmt"
 
-	ethrpc "github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/apimiddleware/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/eth/helpers/lightclient"
+	ethrpc "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/signing"
-	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/container/trie"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls/blst"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls/common"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
+	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/container/trie"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls/blst"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls/common"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 )
 
 const (

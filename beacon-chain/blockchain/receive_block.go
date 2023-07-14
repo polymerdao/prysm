@@ -1,18 +1,27 @@
 package blockchain
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/monitoring/tracing"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/time"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	forkchoicetypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/types"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/monitoring/tracing"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1/attestation"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"go.opencensus.io/trace"
 )
 
@@ -45,16 +54,68 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		return err
 	}
 
+	preState, err := s.getBlockPreState(ctx, blockCopy.Block())
+	if err != nil {
+		return errors.Wrap(err, "could not get block's prestate")
+	}
+	// Save current justified and finalized epochs for future use.
+	currStoreJustifiedEpoch := s.CurrentJustifiedCheckpt().Epoch
+	currStoreFinalizedEpoch := s.FinalizedCheckpt().Epoch
+
+	preStateVersion, preStateHeader, err := getStateVersionAndPayload(preState)
+	if err != nil {
+		return err
+	}
+
+	postState, err := s.validateStateTransition(ctx, preState, blockCopy)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate consensus state transition function")
+	}
+	isValidPayload, err := s.validateExecutionOnBlock(ctx, preStateVersion, preStateHeader, blockCopy, blockRoot)
+	if err != nil {
+		return errors.Wrap(err, "could not notify the engine of the new payload")
+	}
+	// The rest of block processing takes a lock on forkchoice.
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
+	if err := s.savePostStateInfo(ctx, blockRoot, blockCopy, postState); err != nil {
+		return errors.Wrap(err, "could not save post state info")
+	}
+
 	// Apply state transition on the new block.
-	if err := s.onBlock(ctx, blockCopy, blockRoot); err != nil {
+	if err := s.postBlockProcess(ctx, blockCopy, blockRoot, postState, isValidPayload); err != nil {
 		err := errors.Wrap(err, "could not process block")
 		tracing.AnnotateError(span, err)
 		return err
 	}
 
-	// Handle post block operations such as attestations and exits.
-	if err := s.handlePostBlockOperations(blockCopy.Block()); err != nil {
-		return err
+	if err := s.updateJustificationOnBlock(ctx, preState, postState, currStoreJustifiedEpoch); err != nil {
+		return errors.Wrap(err, "could not update justified checkpoint")
+	}
+
+	newFinalized, err := s.updateFinalizationOnBlock(ctx, preState, postState, currStoreFinalizedEpoch)
+	if err != nil {
+		return errors.Wrap(err, "could not update finalized checkpoint")
+	}
+	// Send finalized events and finalized deposits in the background
+	if newFinalized {
+		finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+		go s.sendNewFinalizedEvent(ctx, blockCopy, postState, finalized)
+		depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
+		go func() {
+			s.insertFinalizedDeposits(depCtx, finalized.Root)
+			cancel()
+		}()
+	}
+
+	// If slasher is configured, forward the attestations in the block via an event feed for processing.
+	if features.Get().EnableSlasher {
+		go s.sendBlockAttestationsToSlasher(blockCopy, preState)
+	}
+
+	// Handle post block operations such as pruning exits and bls messages if incoming block is the head
+	if err := s.prunePostBlockOperationPools(ctx, blockCopy, blockRoot); err != nil {
+		log.WithError(err).Error("Could not prune canonical objects from pool ")
 	}
 
 	// Have we been finalizing? Should we start saving hot states to db?
@@ -63,11 +124,13 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 	}
 
 	// Reports on block and fork choice metrics.
-	finalized := s.FinalizedCheckpt()
+	cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
 	reportSlotMetrics(blockCopy.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
 
 	// Log block sync status.
-	justified := s.CurrentJustifiedCheckpt()
+	cp = s.cfg.ForkChoiceStore.JustifiedCheckpoint()
+	justified := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
 	if err := logBlockSyncStatus(blockCopy.Block(), blockRoot, justified, finalized, receivedTime, uint64(s.genesisTime.Unix())); err != nil {
 		log.WithError(err).Error("Unable to log block sync status")
 	}
@@ -80,6 +143,8 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		log.WithError(err).Error("Unable to log state transition data")
 	}
 
+	chainServiceProcessingTime.Observe(float64(time.Since(receivedTime).Milliseconds()))
+
 	return nil
 }
 
@@ -89,6 +154,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []interfaces.ReadOnlySignedBeaconBlock, blkRoots [][32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.ReceiveBlockBatch")
 	defer span.End()
+
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 
 	// Apply state transition on the incoming newly received block batches, one by one.
 	if err := s.onBlockBatch(ctx, blocks, blkRoots); err != nil {
@@ -114,14 +182,15 @@ func (s *Service) ReceiveBlockBatch(ctx context.Context, blocks []interfaces.Rea
 		})
 
 		// Reports on blockCopy and fork choice metrics.
-		finalized := s.FinalizedCheckpt()
+		cp := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+		finalized := &ethpb.Checkpoint{Epoch: cp.Epoch, Root: bytesutil.SafeCopyBytes(cp.Root[:])}
 		reportSlotMetrics(blockCopy.Block().Slot(), s.HeadSlot(), s.CurrentSlot(), finalized)
 	}
 
 	if err := s.cfg.BeaconDB.SaveBlocks(ctx, s.getInitSyncBlocks()); err != nil {
 		return err
 	}
-	finalized := s.FinalizedCheckpt()
+	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized == nil {
 		return errNilFinalizedInStore
 	}
@@ -142,32 +211,49 @@ func (s *Service) HasBlock(ctx context.Context, root [32]byte) bool {
 
 // ReceiveAttesterSlashing receives an attester slashing and inserts it to forkchoice
 func (s *Service) ReceiveAttesterSlashing(ctx context.Context, slashing *ethpb.AttesterSlashing) {
+	s.cfg.ForkChoiceStore.Lock()
+	defer s.cfg.ForkChoiceStore.Unlock()
 	s.InsertSlashingsToForkChoiceStore(ctx, []*ethpb.AttesterSlashing{slashing})
 }
 
-func (s *Service) handlePostBlockOperations(b interfaces.ReadOnlyBeaconBlock) error {
+// prunePostBlockOperationPools only runs on new head otherwise should return a nil.
+func (s *Service) prunePostBlockOperationPools(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock, root [32]byte) error {
+	headRoot, err := s.HeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+	// By comparing the current headroot, that has already gone through forkchoice,
+	// we can assume that if equal the current block root is canonical.
+	if !bytes.Equal(headRoot, root[:]) {
+		return nil
+	}
+
 	// Mark block exits as seen so we don't include same ones in future blocks.
-	for _, e := range b.Body().VoluntaryExits() {
+	for _, e := range blk.Block().Body().VoluntaryExits() {
 		s.cfg.ExitPool.MarkIncluded(e)
 	}
 
 	// Mark block BLS changes as seen so we don't include same ones in future blocks.
-	if err := s.handleBlockBLSToExecChanges(b); err != nil {
+	if err := s.markIncludedBlockBLSToExecChanges(blk.Block()); err != nil {
 		return errors.Wrap(err, "could not process BLSToExecutionChanges")
 	}
 
-	//  Mark attester slashings as seen so we don't include same ones in future blocks.
-	for _, as := range b.Body().AttesterSlashings() {
+	// Mark slashings as seen so we don't include same ones in future blocks.
+	for _, as := range blk.Block().Body().AttesterSlashings() {
 		s.cfg.SlashingPool.MarkIncludedAttesterSlashing(as)
 	}
+	for _, ps := range blk.Block().Body().ProposerSlashings() {
+		s.cfg.SlashingPool.MarkIncludedProposerSlashing(ps)
+	}
+
 	return nil
 }
 
-func (s *Service) handleBlockBLSToExecChanges(blk interfaces.ReadOnlyBeaconBlock) error {
-	if blk.Version() < version.Capella {
+func (s *Service) markIncludedBlockBLSToExecChanges(headBlock interfaces.ReadOnlyBeaconBlock) error {
+	if headBlock.Version() < version.Capella {
 		return nil
 	}
-	changes, err := blk.Body().BLSToExecutionChanges()
+	changes, err := headBlock.Body().BLSToExecutionChanges()
 	if err != nil {
 		return errors.Wrap(err, "could not get BLSToExecutionChanges")
 	}
@@ -179,11 +265,12 @@ func (s *Service) handleBlockBLSToExecChanges(blk interfaces.ReadOnlyBeaconBlock
 
 // This checks whether it's time to start saving hot state to DB.
 // It's time when there's `epochsSinceFinalitySaveHotStateDB` epochs of non-finality.
+// Requires a read lock on forkchoice
 func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
 	currentEpoch := slots.ToEpoch(s.CurrentSlot())
 	// Prevent `sinceFinality` going underflow.
 	var sinceFinality primitives.Epoch
-	finalized := s.FinalizedCheckpt()
+	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
 	if finalized == nil {
 		return errNilFinalizedInStore
 	}
@@ -197,4 +284,110 @@ func (s *Service) checkSaveHotStateDB(ctx context.Context) error {
 	}
 
 	return s.cfg.StateGen.DisableSaveHotStateToDB(ctx)
+}
+
+// This performs the state transition function and returns the poststate or an
+// error if the block fails to verify the consensus rules
+func (s *Service) validateStateTransition(ctx context.Context, preState state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
+	b := signed.Block()
+	// Verify that the parent block is in forkchoice
+	parentRoot := b.ParentRoot()
+	if !s.InForkchoice(parentRoot) {
+		return nil, ErrNotDescendantOfFinalized
+	}
+	stateTransitionStartTime := time.Now()
+	postState, err := transition.ExecuteStateTransition(ctx, preState, signed)
+	if err != nil {
+		return nil, invalidBlock{error: err}
+	}
+	stateTransitionProcessingTime.Observe(float64(time.Since(stateTransitionStartTime).Milliseconds()))
+	return postState, nil
+}
+
+// updateJustificationOnBlock updates the justified checkpoint on DB if the
+// incoming block has updated it on forkchoice.
+func (s *Service) updateJustificationOnBlock(ctx context.Context, preState, postState state.BeaconState, preJustifiedEpoch primitives.Epoch) error {
+	justified := s.cfg.ForkChoiceStore.JustifiedCheckpoint()
+	preStateJustifiedEpoch := preState.CurrentJustifiedCheckpoint().Epoch
+	postStateJustifiedEpoch := postState.CurrentJustifiedCheckpoint().Epoch
+	if justified.Epoch > preJustifiedEpoch || (justified.Epoch == postStateJustifiedEpoch && justified.Epoch > preStateJustifiedEpoch) {
+		if err := s.cfg.BeaconDB.SaveJustifiedCheckpoint(ctx, &ethpb.Checkpoint{
+			Epoch: justified.Epoch, Root: justified.Root[:],
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// updateFinalizationOnBlock performs some duties when the incoming block
+// changes the finalized checkpoint. It returns true when this has happened.
+func (s *Service) updateFinalizationOnBlock(ctx context.Context, preState, postState state.BeaconState, preFinalizedEpoch primitives.Epoch) (bool, error) {
+	preStateFinalizedEpoch := preState.FinalizedCheckpoint().Epoch
+	postStateFinalizedEpoch := postState.FinalizedCheckpoint().Epoch
+	finalized := s.cfg.ForkChoiceStore.FinalizedCheckpoint()
+	if finalized.Epoch > preFinalizedEpoch || (finalized.Epoch == postStateFinalizedEpoch && finalized.Epoch > preStateFinalizedEpoch) {
+		if err := s.updateFinalized(ctx, &ethpb.Checkpoint{Epoch: finalized.Epoch, Root: finalized.Root[:]}); err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// sendNewFinalizedEvent sends a new finalization checkpoint event over the
+// event feed. It needs to be called on the background
+func (s *Service) sendNewFinalizedEvent(ctx context.Context, signed interfaces.ReadOnlySignedBeaconBlock, postState state.BeaconState, finalized *forkchoicetypes.Checkpoint) {
+	isValidPayload := false
+	s.headLock.RLock()
+	if s.head != nil {
+		isValidPayload = s.head.optimistic
+	}
+	s.headLock.RUnlock()
+
+	// Send an event regarding the new finalized checkpoint over a common event feed.
+	stateRoot := signed.Block().StateRoot()
+	s.cfg.StateNotifier.StateFeed().Send(&feed.Event{
+		Type: statefeed.FinalizedCheckpoint,
+		Data: &ethpbv1.EventFinalizedCheckpoint{
+			Epoch:               postState.FinalizedCheckpoint().Epoch,
+			Block:               postState.FinalizedCheckpoint().Root,
+			State:               stateRoot[:],
+			ExecutionOptimistic: isValidPayload,
+		},
+	})
+}
+
+// sendBlockAttestationsToSlasher sends the incoming block's attestation to the slasher
+func (s *Service) sendBlockAttestationsToSlasher(signed interfaces.ReadOnlySignedBeaconBlock, preState state.BeaconState) {
+	// Feed the indexed attestation to slasher if enabled. This action
+	// is done in the background to avoid adding more load to this critical code path.
+	ctx := context.TODO()
+	for _, att := range signed.Block().Body().Attestations() {
+		committee, err := helpers.BeaconCommitteeFromState(ctx, preState, att.Data.Slot, att.Data.CommitteeIndex)
+		if err != nil {
+			log.WithError(err).Error("Could not get attestation committee")
+			return
+		}
+		indexedAtt, err := attestation.ConvertToIndexed(ctx, att, committee)
+		if err != nil {
+			log.WithError(err).Error("Could not convert to indexed attestation")
+			return
+		}
+		s.cfg.SlasherAttestationsFeed.Send(indexedAtt)
+	}
+}
+
+// validateExecutionOnBlock notifies the engine of the incoming block execution payload and returns true if the payload is valid
+func (s *Service) validateExecutionOnBlock(ctx context.Context, ver int, header interfaces.ExecutionData, signed interfaces.ReadOnlySignedBeaconBlock, blockRoot [32]byte) (bool, error) {
+	isValidPayload, err := s.notifyNewPayload(ctx, ver, header, signed)
+	if err != nil {
+		return false, s.handleInvalidExecutionError(ctx, err, blockRoot, signed.Block().ParentRoot())
+	}
+	if signed.Version() < version.Capella && isValidPayload {
+		if err := s.validateMergeTransitionBlock(ctx, ver, header, signed); err != nil {
+			return isValidPayload, err
+		}
+	}
+	return isValidPayload, nil
 }

@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/prysmaticlabs/prysm/v3/cmd/validator/flags"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager/local"
+	"github.com/prysmaticlabs/prysm/v4/cmd/validator/flags"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
 	"github.com/urfave/cli/v2"
 	keystorev4 "github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4"
 )
@@ -52,11 +52,11 @@ func createKeystore(t *testing.T, path string) (*keymanager.Keystore, string) {
 	id, err := uuid.NewRandom()
 	require.NoError(t, err)
 	keystoreFile := &keymanager.Keystore{
-		Crypto:  cryptoFields,
-		ID:      id.String(),
-		Pubkey:  fmt.Sprintf("%x", validatingKey.PublicKey().Marshal()),
-		Version: encryptor.Version(),
-		Name:    encryptor.Name(),
+		Crypto:      cryptoFields,
+		ID:          id.String(),
+		Pubkey:      fmt.Sprintf("%x", validatingKey.PublicKey().Marshal()),
+		Version:     encryptor.Version(),
+		Description: encryptor.Name(),
 	}
 	encoded, err := json.MarshalIndent(keystoreFile, "", "\t")
 	require.NoError(t, err)
