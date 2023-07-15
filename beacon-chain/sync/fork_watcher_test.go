@@ -2,9 +2,10 @@ package sync
 
 import (
 	"context"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"testing"
 	"time"
+
+	"github.com/libp2p/go-libp2p/core/protocol"
 
 	"github.com/prysmaticlabs/prysm/v4/async/abool"
 	mockChain "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
@@ -96,7 +97,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[protocol.ID]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-					rpcMap[string(p)] = true
+					rpcMap[p] = true
 				}
 				assert.Equal(t, true, rpcMap[protocol.ID(p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())], "topic doesn't exist")
 				assert.Equal(t, true, rpcMap[protocol.ID(p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())], "topic doesn't exist")
@@ -140,7 +141,7 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 				rpcMap := make(map[protocol.ID]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-					rpcMap[string(p)] = true
+					rpcMap[p] = true
 				}
 			},
 		},
@@ -196,7 +197,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				ptcls := s.cfg.p2p.Host().Mux().Protocols()
 				pMap := make(map[protocol.ID]bool)
 				for _, p := range ptcls {
-					pMap[string(p)] = true
+					pMap[p] = true
 				}
 				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
 				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
@@ -267,7 +268,7 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				ptcls := s.cfg.p2p.Host().Mux().Protocols()
 				pMap := make(map[protocol.ID]bool)
 				for _, p := range ptcls {
-					pMap[string(p)] = true
+					pMap[p] = true
 				}
 				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
 				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])

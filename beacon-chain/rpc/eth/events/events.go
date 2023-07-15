@@ -43,12 +43,12 @@ const (
 	SyncCommitteeContributionTopic = "contribution_and_proof"
 	// BLSToExecutionChangeTopic represents a new received BLS to execution change event topic.
 	BLSToExecutionChangeTopic = "bls_to_execution_change"
+	// PayloadAttributesTopic represents a new payload attributes for execution payload building event topic.
+	PayloadAttributesTopic = "payload_attributes"
 	// LightClientFinalityUpdateTopic represents a new light client finality update event topic.
 	LightClientFinalityUpdateTopic = "light_client_finality_update"
 	// LightClientOptimisticUpdateTopic represents a new light client optimistic update event topic.
 	LightClientOptimisticUpdateTopic = "light_client_optimistic_update"
-	// PayloadAttributesTopic represents a new payload attributes for execution payload building event topic.
-	PayloadAttributesTopic = "payload_attributes"
 )
 
 var casesHandled = map[string]bool{
@@ -60,9 +60,9 @@ var casesHandled = map[string]bool{
 	ChainReorgTopic:                  true,
 	SyncCommitteeContributionTopic:   true,
 	BLSToExecutionChangeTopic:        true,
+	PayloadAttributesTopic:           true,
 	LightClientFinalityUpdateTopic:   true,
 	LightClientOptimisticUpdateTopic: true,
-	PayloadAttributesTopic:           true,
 }
 
 // StreamEvents allows requesting all events from a set of topics defined in the Ethereum consensus API standard.

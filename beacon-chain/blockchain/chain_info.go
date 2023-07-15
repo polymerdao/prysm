@@ -82,7 +82,6 @@ type HeadFetcher interface {
 
 // ForkFetcher retrieves the current fork information of the Ethereum beacon chain.
 type ForkFetcher interface {
-	ForkChoicer() forkchoice.ForkChoicer
 	CurrentFork() *ethpb.Fork
 	GenesisFetcher
 	TimeFetcher

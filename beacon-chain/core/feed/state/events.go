@@ -25,12 +25,12 @@ const (
 	FinalizedCheckpoint
 	// NewHead of the chain event.
 	NewHead
+	// MissedSlot is sent when we need to notify users that a slot was missed.
+	MissedSlot
 	// LightClientFinalityUpdate event
 	LightClientFinalityUpdate
 	// LightClientOptimisticUpdate event
 	LightClientOptimisticUpdate
-	// MissedSlot is sent when we need to notify users that a slot was missed.
-	MissedSlot
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
