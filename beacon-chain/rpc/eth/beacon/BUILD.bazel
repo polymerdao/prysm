@@ -8,7 +8,6 @@ go_library(
         "config.go",
         "handlers.go",
         "lightclient.go",
-        "handlers.go",
         "log.go",
         "pool.go",
         "server.go",
