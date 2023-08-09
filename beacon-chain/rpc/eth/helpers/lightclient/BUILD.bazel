@@ -5,7 +5,7 @@ go_library(
     srcs = [
         "lightclient.go",
     ],
-    importpath = "github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/eth/helpers/lightclient",
+    importpath = "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient",
     visibility = ["//visibility:public"],
     deps = [
         "//api/grpc:go_default_library",
