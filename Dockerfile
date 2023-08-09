@@ -24,7 +24,7 @@ RUN case "$BUILDARCH" in \
   amd64) arch=x86_64 ;; \
   arm64) arch=arm64  ;; \
   esac && \
-  curl -sL "https://releases.bazel.build/5.3.0/release/bazel-5.3.0-linux-${arch}" -o /tmp/bazel && \
+  curl -sL "https://releases.bazel.build/5.4.0/release/bazel-5.4.0-linux-${arch}" -o /tmp/bazel && \
   chmod +x /tmp/bazel && \
   /tmp/bazel build --config="linux_${TARGETARCH}" "//cmd/$BINARY:$BINARY"
 
