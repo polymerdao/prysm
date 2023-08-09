@@ -28,11 +28,14 @@ RUN case "$BUILDARCH" in \
   chmod +x /tmp/bazel && \
   /tmp/bazel build --config="linux_${TARGETARCH}" "//cmd/$BINARY:$BINARY"
 
-FROM alpine:3.18.0
+FROM alpine:3.18
 
 ARG BINARY
 
 RUN apk add --no-cache libstdc++ libc6-compat
+
+# Workaround for https://gitlab.alpinelinux.org/alpine/aports/-/issues/14846
+RUN apk add gcompat
 
 COPY --from=build-env "/src/bazel-bin/cmd/$BINARY/${BINARY}_/$BINARY" /usr/bin
 
