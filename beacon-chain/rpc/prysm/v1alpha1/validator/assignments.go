@@ -5,23 +5,24 @@ import (
 	"context"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed"
-	statefeed "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed/state"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	coreTime "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/transition"
-	beaconState "github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/rand"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
+	statefeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/state"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	coreTime "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	beaconState "github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/rand"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // GetDuties returns the duties assigned to a list of validators specified
@@ -145,6 +146,7 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 
 	validatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
 	nextValidatorAssignments := make([]*ethpb.DutiesResponse_Duty, 0, len(req.PublicKeys))
+
 	for _, pubKey := range req.PublicKeys {
 		if ctx.Err() != nil {
 			return nil, status.Errorf(codes.Aborted, "Could not continue fetching assignments: %v", ctx.Err())
@@ -193,7 +195,8 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 			vs.ProposerSlotIndexCache.PrunePayloadIDs(epochStartSlot)
 		} else {
 			// If the validator isn't in the beacon state, try finding their deposit to determine their status.
-			vStatus, _ := vs.validatorStatus(ctx, s, pubKey)
+			// We don't need the lastActiveValidatorFn because we don't use the response in this.
+			vStatus, _ := vs.validatorStatus(ctx, s, pubKey, nil)
 			assignment.Status = vStatus.Status
 		}
 
@@ -231,8 +234,8 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 		validatorAssignments = append(validatorAssignments, assignment)
 		nextValidatorAssignments = append(nextValidatorAssignments, nextAssignment)
 		// Assign relevant validator to subnet.
-		vs.AssignValidatorToSubnet(pubKey, assignment.Status)
-		vs.AssignValidatorToSubnet(pubKey, nextAssignment.Status)
+		assignValidatorToSubnet(pubKey, assignment.Status)
+		assignValidatorToSubnet(pubKey, nextAssignment.Status)
 	}
 
 	return &ethpb.DutiesResponse{
@@ -244,7 +247,12 @@ func (vs *Server) duties(ctx context.Context, req *ethpb.DutiesRequest) (*ethpb.
 
 // AssignValidatorToSubnet checks the status and pubkey of a particular validator
 // to discern whether persistent subnets need to be registered for them.
-func (vs *Server) AssignValidatorToSubnet(pubkey []byte, status ethpb.ValidatorStatus) {
+func (vs *Server) AssignValidatorToSubnet(_ context.Context, req *ethpb.AssignValidatorToSubnetRequest) (*emptypb.Empty, error) {
+	assignValidatorToSubnet(req.PublicKey, req.Status)
+	return &emptypb.Empty{}, nil
+}
+
+func assignValidatorToSubnet(pubkey []byte, status ethpb.ValidatorStatus) {
 	if status != ethpb.ValidatorStatus_ACTIVE && status != ethpb.ValidatorStatus_EXITING {
 		return
 	}

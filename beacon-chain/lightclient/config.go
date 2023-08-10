@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
 )
 
 // ConfigJSON is the JSON representation of the light client config.

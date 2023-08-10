@@ -3,10 +3,8 @@
 package flags
 
 import (
-	"strings"
-
-	"github.com/prysmaticlabs/prysm/v3/cmd"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
+	"github.com/prysmaticlabs/prysm/v4/cmd"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/urfave/cli/v2"
 )
 
@@ -27,6 +25,11 @@ var (
 		Usage: "Number of total skip slot to fallback from using relay/builder to local execution engine for block construction in last epoch rolling window",
 		Value: 8,
 	}
+	LocalBlockValueBoost = &cli.Float64Flag{
+		Name: "local-block-value-boost",
+		Usage: "A percentage boost for local block construction. This is used to prioritize local block construction over relay/builder block construction" +
+			"Boost is an additional percentage to multiple local block value. Use builder block if: builder_bid_value * 100 > local_block_value * (local-block-value-boost + 100)",
+	}
 	// ExecutionEngineEndpoint provides an HTTP access endpoint to connect to an execution client on the execution layer
 	ExecutionEngineEndpoint = &cli.StringFlag{
 		Name:  "execution-endpoint",
@@ -38,13 +41,6 @@ var (
 		Name: "execution-headers",
 		Usage: "A comma separated list of key value pairs to pass as HTTP headers for all execution " +
 			"client calls. Example: --execution-headers=key1=value1,key2=value2",
-	}
-	// Deprecated: HTTPWeb3ProviderFlag is a deprecated flag and is an alias for the ExecutionEngineEndpoint flag.
-	HTTPWeb3ProviderFlag = &cli.StringFlag{
-		Name:   "http-web3provider",
-		Usage:  "DEPRECATED: A mainchain web3 provider string http endpoint. Can contain auth header as well in the format --http-web3provider=\"https://goerli.infura.io/v3/xxxx,Basic xxx\" for project secret (base64 encoded) and --http-web3provider=\"https://goerli.infura.io/v3/xxxx,Bearer xxx\" for jwt use",
-		Value:  "http://localhost:8551",
-		Hidden: true,
 	}
 	// ExecutionJWTSecretFlag provides a path to a file containing a hex-encoded string representing a 32 byte secret
 	// used to authenticate with an execution node via HTTP. This is required if using an HTTP connection, otherwise all requests
@@ -96,7 +92,7 @@ var (
 	HTTPModules = &cli.StringFlag{
 		Name:  "http-modules",
 		Usage: "Comma-separated list of API module names. Possible values: `" + PrysmAPIModule + `,` + EthAPIModule + "`.",
-		Value: strings.Join([]string{PrysmAPIModule, EthAPIModule}, ","),
+		Value: PrysmAPIModule + `,` + EthAPIModule,
 	}
 	// DisableGRPCGateway for JSON-HTTP requests to the beacon node.
 	DisableGRPCGateway = &cli.BoolFlag{
@@ -206,6 +202,7 @@ var (
 		Usage: "Sets the maximum number of headers that a deposit log query can fetch.",
 		Value: uint64(1000),
 	}
+
 	// WeakSubjectivityCheckpoint defines the weak subjectivity checkpoint the node must sync through to defend against long range attacks.
 	WeakSubjectivityCheckpoint = &cli.StringFlag{
 		Name: "weak-subjectivity-checkpoint",

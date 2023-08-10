@@ -4,15 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	state_native "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
 )
 
 func TestHasVoted_OK(t *testing.T) {
@@ -150,7 +150,7 @@ func TestSlashValidator_OK(t *testing.T) {
 
 	maxBalance := params.BeaconConfig().MaxEffectiveBalance
 	slashedBalance := state.Slashings()[state.Slot().Mod(uint64(params.BeaconConfig().EpochsPerSlashingsVector))]
-	assert.Equal(t, maxBalance, slashedBalance, "Slashed balance isnt the expected amount")
+	assert.Equal(t, maxBalance, slashedBalance, "Slashed balance isn't the expected amount")
 
 	whistleblowerReward := slashedBalance / params.BeaconConfig().WhistleBlowerRewardQuotient
 	bal, err := state.BalanceAtIndex(proposer)

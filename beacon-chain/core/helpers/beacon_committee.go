@@ -10,17 +10,17 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/container/slice"
-	"github.com/prysmaticlabs/prysm/v3/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v3/math"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/container/slice"
+	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/math"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 )
 
 var (
@@ -336,20 +336,21 @@ func UpdateCommitteeCache(ctx context.Context, state state.ReadOnlyBeaconState, 
 }
 
 // UpdateProposerIndicesInCache updates proposer indices entry of the committee cache.
-func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaconState) error {
+// Input state is used to retrieve active validator indices.
+// Input epoch is the epoch to retrieve proposer indices for.
+func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaconState, epoch primitives.Epoch) error {
 	// The cache uses the state root at the (current epoch - 1)'s slot as key. (e.g. for epoch 2, the key is root at slot 63)
 	// Which is the reason why we skip genesis epoch.
-	if time.CurrentEpoch(state) <= params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
+	if epoch <= params.BeaconConfig().GenesisEpoch+params.BeaconConfig().MinSeedLookahead {
 		return nil
 	}
 
 	// Use state root from (current_epoch - 1))
-	wantedEpoch := time.PrevEpoch(state)
-	s, err := slots.EpochEnd(wantedEpoch)
+	s, err := slots.EpochEnd(epoch - 1)
 	if err != nil {
 		return err
 	}
-	r, err := StateRootAtSlot(state, s)
+	r, err := state.StateRootAtIndex(uint64(s % params.BeaconConfig().SlotsPerHistoricalRoot))
 	if err != nil {
 		return err
 	}
@@ -366,11 +367,11 @@ func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaco
 		return nil
 	}
 
-	indices, err := ActiveValidatorIndices(ctx, state, time.CurrentEpoch(state))
+	indices, err := ActiveValidatorIndices(ctx, state, epoch)
 	if err != nil {
 		return err
 	}
-	proposerIndices, err := precomputeProposerIndices(state, indices)
+	proposerIndices, err := precomputeProposerIndices(state, indices, epoch)
 	if err != nil {
 		return err
 	}
@@ -382,10 +383,10 @@ func UpdateProposerIndicesInCache(ctx context.Context, state state.ReadOnlyBeaco
 
 // ClearCache clears the beacon committee cache and sync committee cache.
 func ClearCache() {
-	committeeCache = cache.NewCommitteesCache()
-	proposerIndicesCache = cache.NewProposerIndicesCache()
-	syncCommitteeCache = cache.NewSyncCommittee()
-	balanceCache = cache.NewEffectiveBalanceCache()
+	committeeCache.Clear()
+	proposerIndicesCache.Clear()
+	syncCommitteeCache.Clear()
+	balanceCache.Clear()
 }
 
 // computeCommittee returns the requested shuffled committee out of the total committees using
@@ -432,11 +433,10 @@ func computeCommittee(
 
 // This computes proposer indices of the current epoch and returns a list of proposer indices,
 // the index of the list represents the slot number.
-func precomputeProposerIndices(state state.ReadOnlyBeaconState, activeIndices []primitives.ValidatorIndex) ([]primitives.ValidatorIndex, error) {
+func precomputeProposerIndices(state state.ReadOnlyBeaconState, activeIndices []primitives.ValidatorIndex, e primitives.Epoch) ([]primitives.ValidatorIndex, error) {
 	hashFunc := hash.CustomSHA256Hasher()
 	proposerIndices := make([]primitives.ValidatorIndex, params.BeaconConfig().SlotsPerEpoch)
 
-	e := time.CurrentEpoch(state)
 	seed, err := Seed(state, e, params.BeaconConfig().DomainBeaconProposer)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not generate seed")

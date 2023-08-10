@@ -7,16 +7,17 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/kr/pretty"
 	fssz "github.com/prysmaticlabs/fastssz"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/transition"
-	state_native "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/encoding/ssz/equality"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	prefixed "github.com/prysmaticlabs/prysm/v3/runtime/logging/logrus-prefixed-formatter"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/equality"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	prefixed "github.com/prysmaticlabs/prysm/v4/runtime/logging/logrus-prefixed-formatter"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/d4l3k/messagediff.v1"
@@ -62,7 +63,7 @@ func main() {
 						"signed_block_header|" +
 						"signed_voluntary_exit|" +
 						"voluntary_exit|" +
-						"state",
+						"state_capella",
 					Required:    true,
 					Destination: &sszType,
 				},
@@ -92,12 +93,46 @@ func main() {
 					data = &ethpb.SignedVoluntaryExit{}
 				case "voluntary_exit":
 					data = &ethpb.VoluntaryExit{}
-				case "state":
-					data = &ethpb.BeaconState{}
+				case "state_capella":
+					data = &ethpb.BeaconStateCapella{}
 				default:
 					log.Fatal("Invalid type")
 				}
 				prettyPrint(sszPath, data)
+				return nil
+			},
+		},
+		{
+			Name:    "benchmark-hash",
+			Aliases: []string{"b"},
+			Usage:   "benchmark-hash SSZ data",
+			Flags: []cli.Flag{
+				&cli.StringFlag{
+					Name:        "ssz-path",
+					Usage:       "Path to file(ssz)",
+					Required:    true,
+					Destination: &sszPath,
+				},
+				&cli.StringFlag{
+					Name: "data-type",
+					Usage: "ssz file data type: " +
+						"block_capella|" +
+						"blinded_block_capella|" +
+						"signed_block_capella|" +
+						"attestation|" +
+						"block_header|" +
+						"deposit|" +
+						"proposer_slashing|" +
+						"signed_block_header|" +
+						"signed_voluntary_exit|" +
+						"voluntary_exit|" +
+						"state_capella",
+					Required:    true,
+					Destination: &sszType,
+				},
+			},
+			Action: func(c *cli.Context) error {
+				benchmarkHash(sszPath, sszType)
 				return nil
 			},
 		},
@@ -229,4 +264,27 @@ func prettyPrint(sszPath string, data fssz.Unmarshaler) {
 	re := regexp.MustCompile("(?m)[\r\n]+^.*XXX_.*$")
 	str = re.ReplaceAllString(str, "")
 	fmt.Print(str)
+}
+
+func benchmarkHash(sszPath string, sszType string) {
+	switch sszType {
+	case "state_capella":
+		data := &ethpb.BeaconStateCapella{}
+		if err := dataFetcher(sszPath, data); err != nil {
+			log.Fatal(err)
+		}
+		st, err := state_native.InitializeFromProtoCapella(data)
+		if err != nil {
+			log.Fatal("not a state")
+		}
+		start := time.Now()
+		root, err := st.HashTreeRoot(context.Background())
+		if err != nil {
+			log.Fatal("couldn't hash")
+		}
+		fmt.Printf("Duration: %v HTR: %#x\n", time.Since(start), root)
+		return
+	default:
+		log.Fatal("Invalid type")
+	}
 }

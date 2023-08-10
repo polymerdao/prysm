@@ -9,20 +9,23 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/ptypes/empty"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	validatorServiceConfig "github.com/prysmaticlabs/prysm/v3/config/validator/service"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpbservice "github.com/prysmaticlabs/prysm/v3/proto/eth/service"
-	eth "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager/derived"
-	slashingprotection "github.com/prysmaticlabs/prysm/v3/validator/slashing-protection-history"
-	"github.com/prysmaticlabs/prysm/v3/validator/slashing-protection-history/format"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	validatorServiceConfig "github.com/prysmaticlabs/prysm/v4/config/validator/service"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/validator"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
+	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/validator/client"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/derived"
+	slashingprotection "github.com/prysmaticlabs/prysm/v4/validator/slashing-protection-history"
+	"github.com/prysmaticlabs/prysm/v4/validator/slashing-protection-history/format"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // ListKeystores implements the standard validator key management API.
@@ -88,6 +91,9 @@ func (s *Server) ImportKeystores(
 	for i := 0; i < len(req.Keystores); i++ {
 		k := &keymanager.Keystore{}
 		err = json.Unmarshal([]byte(req.Keystores[i]), k)
+		if k.Description == "" && k.Name != "" {
+			k.Description = k.Name
+		}
 		if err != nil {
 			// we want to ignore unmarshal errors for now, proper status in importKeystore
 			k.Pubkey = "invalid format"
@@ -403,14 +409,15 @@ func (s *Server) GetGasLimit(_ context.Context, req *ethpbservice.PubkeyRequest)
 			Pubkey: validatorKey,
 		},
 	}
-	if s.validatorService.ProposerSettings() != nil {
-		proposerOption, found := s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(validatorKey)]
+	settings := s.validatorService.ProposerSettings()
+	if settings != nil {
+		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)]
 		if found {
 			if proposerOption.BuilderConfig != nil {
 				resp.Data.GasLimit = uint64(proposerOption.BuilderConfig.GasLimit)
 				return resp, nil
 			}
-		} else if s.validatorService.ProposerSettings().DefaultConfig != nil && s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig != nil {
+		} else if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
 			resp.Data.GasLimit = uint64(s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig.GasLimit)
 			return resp, nil
 		}
@@ -424,63 +431,43 @@ func (s *Server) SetGasLimit(ctx context.Context, req *ethpbservice.SetGasLimitR
 	if s.validatorService == nil {
 		return nil, status.Error(codes.FailedPrecondition, "Validator service not ready")
 	}
-
 	validatorKey := req.Pubkey
 
 	if err := validatePublicKey(validatorKey); err != nil {
 		return nil, status.Error(codes.FailedPrecondition, err.Error())
 	}
-
-	var pBuilderConfig *validatorServiceConfig.BuilderConfig
-
-	if s.validatorService.ProposerSettings() != nil &&
-		s.validatorService.ProposerSettings().DefaultConfig != nil &&
-		s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig != nil {
-		// Make a copy of BuilderConfig from DefaultConfig (thus "*" then "&"), so when we change GasLimit, we do not mess up with
-		// "DefaultConfig.BuilderConfig".
-		bo := *s.validatorService.ProposerSettings().DefaultConfig.BuilderConfig
-		pBuilderConfig = &bo
-		pBuilderConfig.GasLimit = validatorServiceConfig.Uint64(req.GasLimit)
-	} else {
-		// No default BuilderConfig to copy from, just create one and set "GasLimit", but keep "Enabled" to "false".
-		pBuilderConfig = &validatorServiceConfig.BuilderConfig{
-			Enabled:  false,
-			GasLimit: validatorServiceConfig.Uint64(req.GasLimit),
-			Relays:   []string{},
+	settings := s.validatorService.ProposerSettings()
+	if settings == nil {
+		return &empty.Empty{}, status.Errorf(codes.FailedPrecondition, "no proposer settings were found to update")
+	} else if settings.ProposeConfig == nil {
+		if settings.DefaultConfig == nil || settings.DefaultConfig.BuilderConfig == nil || !settings.DefaultConfig.BuilderConfig.Enabled {
+			return &empty.Empty{}, status.Errorf(codes.FailedPrecondition, "gas limit changes only apply when builder is enabled")
 		}
-	}
-
-	pOption := validatorServiceConfig.ProposerOption{
-		FeeRecipientConfig: nil,
-		BuilderConfig:      pBuilderConfig,
-	}
-
-	if s.validatorService.ProposerSettings() == nil {
-		s.validatorService.SetProposerSettings(&validatorServiceConfig.ProposerSettings{
-			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*validatorServiceConfig.ProposerOption{
-				bytesutil.ToBytes48(validatorKey): &pOption,
-			},
-			DefaultConfig: nil,
-		})
-	} else if s.validatorService.ProposerSettings().ProposeConfig == nil {
-		settings := s.validatorService.ProposerSettings()
 		settings.ProposeConfig = make(map[[fieldparams.BLSPubkeyLength]byte]*validatorServiceConfig.ProposerOption)
-		settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)] = &pOption
-		s.validatorService.SetProposerSettings(settings)
+		option := settings.DefaultConfig.Clone()
+		option.BuilderConfig.GasLimit = validator.Uint64(req.GasLimit)
+		settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)] = option
 	} else {
-		proposerOption, found := s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(validatorKey)]
-
+		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)]
 		if found {
-			if proposerOption.BuilderConfig == nil {
-				proposerOption.BuilderConfig = pBuilderConfig
+			if proposerOption.BuilderConfig == nil || !proposerOption.BuilderConfig.Enabled {
+				return &empty.Empty{}, status.Errorf(codes.FailedPrecondition, "gas limit changes only apply when builder is enabled")
 			} else {
-				proposerOption.BuilderConfig.GasLimit = validatorServiceConfig.Uint64(req.GasLimit)
+				proposerOption.BuilderConfig.GasLimit = validator.Uint64(req.GasLimit)
 			}
 		} else {
-			s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(validatorKey)] = &pOption
+			if settings.DefaultConfig == nil {
+				return &empty.Empty{}, status.Errorf(codes.FailedPrecondition, "gas limit changes only apply when builder is enabled")
+			}
+			option := settings.DefaultConfig.Clone()
+			option.BuilderConfig.GasLimit = validator.Uint64(req.GasLimit)
+			settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)] = option
 		}
 	}
-
+	// save the settings
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set proposer settings: %v", err)
+	}
 	// override the 200 success with 202 according to the specs
 	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", "202")); err != nil {
 		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
@@ -507,7 +494,11 @@ func (s *Server) DeleteGasLimit(ctx context.Context, req *ethpbservice.DeleteGas
 				proposerOption.BuilderConfig.GasLimit = proposerSettings.DefaultConfig.BuilderConfig.GasLimit
 			} else {
 				// Fallback to using global default.
-				proposerOption.BuilderConfig.GasLimit = validatorServiceConfig.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+				proposerOption.BuilderConfig.GasLimit = validator.Uint64(params.BeaconConfig().DefaultBuilderGasLimit)
+			}
+			// save the settings
+			if err := s.validatorService.SetProposerSettings(ctx, proposerSettings); err != nil {
+				return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set proposer settings: %v", err)
 			}
 			// Successfully deleted gas limit (reset to proposer config default or global default).
 			// Return with success http code "204".
@@ -535,27 +526,15 @@ func (s *Server) ListFeeRecipientByPubkey(ctx context.Context, req *ethpbservice
 
 	finalResp := &ethpbservice.GetFeeRecipientByPubkeyResponse{
 		Data: &ethpbservice.GetFeeRecipientByPubkeyResponse_FeeRecipient{
-			Pubkey:     validatorKey,
-			Ethaddress: params.BeaconConfig().DefaultFeeRecipient.Bytes(),
+			Pubkey: validatorKey,
 		},
 	}
 
-	// If no proposer settings is set, use beacon node default (if possible)
-	if s.validatorService.ProposerSettings() == nil {
-		resp, err := s.beaconNodeValidatorClient.GetFeeRecipientByPubKey(ctx, &eth.FeeRecipientByPubKeyRequest{
-			PublicKey: validatorKey,
-		})
-
-		if resp != nil && len(resp.FeeRecipient) != 0 && err == nil {
-			finalResp.Data.Ethaddress = resp.FeeRecipient
-		}
-
-		return finalResp, nil
-	}
+	proposerSettings := s.validatorService.ProposerSettings()
 
 	// If fee recipient is defined for this specific pubkey in proposer configuration, use it
-	if s.validatorService.ProposerSettings().ProposeConfig != nil {
-		proposerOption, found := s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(validatorKey)]
+	if proposerSettings != nil && proposerSettings.ProposeConfig != nil {
+		proposerOption, found := proposerSettings.ProposeConfig[bytesutil.ToBytes48(validatorKey)]
 
 		if found && proposerOption.FeeRecipientConfig != nil {
 			finalResp.Data.Ethaddress = proposerOption.FeeRecipientConfig.FeeRecipient.Bytes()
@@ -564,13 +543,26 @@ func (s *Server) ListFeeRecipientByPubkey(ctx context.Context, req *ethpbservice
 	}
 
 	// If fee recipient is defined in default configuration, use it
-	if s.validatorService.ProposerSettings().DefaultConfig != nil && s.validatorService.ProposerSettings().DefaultConfig.FeeRecipientConfig != nil {
-		finalResp.Data.Ethaddress = s.validatorService.ProposerSettings().DefaultConfig.FeeRecipientConfig.FeeRecipient.Bytes()
+	if proposerSettings != nil && proposerSettings.DefaultConfig != nil && proposerSettings.DefaultConfig.FeeRecipientConfig != nil {
+		finalResp.Data.Ethaddress = proposerSettings.DefaultConfig.FeeRecipientConfig.FeeRecipient.Bytes()
 		return finalResp, nil
 	}
 
-	// Default case
-	return finalResp, nil
+	// Else, use the one defined in beacon node TODO: remove this with db removal
+	resp, err := s.beaconNodeValidatorClient.GetFeeRecipientByPubKey(ctx, &eth.FeeRecipientByPubKeyRequest{
+		PublicKey: validatorKey,
+	})
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to retrieve default fee recipient from beacon node")
+	}
+
+	if resp != nil && len(resp.FeeRecipient) != 0 {
+		finalResp.Data.Ethaddress = resp.FeeRecipient
+		return finalResp, nil
+	}
+
+	return nil, status.Error(codes.InvalidArgument, "No fee recipient set")
 }
 
 // SetFeeRecipientByPubkey updates the eth address mapped to the public key.
@@ -592,10 +584,10 @@ func (s *Server) SetFeeRecipientByPubkey(ctx context.Context, req *ethpbservice.
 		return nil, status.Error(
 			codes.InvalidArgument, "Fee recipient is not a valid Ethereum address")
 	}
-
+	settings := s.validatorService.ProposerSettings()
 	switch {
-	case s.validatorService.ProposerSettings() == nil:
-		s.validatorService.SetProposerSettings(&validatorServiceConfig.ProposerSettings{
+	case settings == nil:
+		settings = &validatorServiceConfig.ProposerSettings{
 			ProposeConfig: map[[fieldparams.BLSPubkeyLength]byte]*validatorServiceConfig.ProposerOption{
 				bytesutil.ToBytes48(validatorKey): {
 					FeeRecipientConfig: &validatorServiceConfig.FeeRecipientConfig{
@@ -605,15 +597,12 @@ func (s *Server) SetFeeRecipientByPubkey(ctx context.Context, req *ethpbservice.
 				},
 			},
 			DefaultConfig: nil,
-		})
-	case s.validatorService.ProposerSettings().ProposeConfig == nil:
-		builderConfig := &validatorServiceConfig.BuilderConfig{}
-		settings := s.validatorService.ProposerSettings()
-
-		if settings.DefaultConfig != nil {
-			builderConfig = settings.DefaultConfig.BuilderConfig
 		}
-
+	case settings.ProposeConfig == nil:
+		var builderConfig *validatorServiceConfig.BuilderConfig
+		if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
+			builderConfig = settings.DefaultConfig.BuilderConfig.Clone()
+		}
 		settings.ProposeConfig = map[[fieldparams.BLSPubkeyLength]byte]*validatorServiceConfig.ProposerOption{
 			bytesutil.ToBytes48(validatorKey): {
 				FeeRecipientConfig: &validatorServiceConfig.FeeRecipientConfig{
@@ -622,33 +611,28 @@ func (s *Server) SetFeeRecipientByPubkey(ctx context.Context, req *ethpbservice.
 				BuilderConfig: builderConfig,
 			},
 		}
-
-		s.validatorService.SetProposerSettings(settings)
 	default:
-		proposerOption, found := s.validatorService.ProposerSettings().ProposeConfig[bytesutil.ToBytes48(validatorKey)]
-
+		proposerOption, found := settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)]
 		if found && proposerOption != nil {
 			proposerOption.FeeRecipientConfig = &validatorServiceConfig.FeeRecipientConfig{
 				FeeRecipient: feeRecipient,
 			}
 		} else {
-			settings := s.validatorService.ProposerSettings()
-
 			var builderConfig = &validatorServiceConfig.BuilderConfig{}
-
-			if settings.DefaultConfig != nil {
-				builderConfig = settings.DefaultConfig.BuilderConfig
+			if settings.DefaultConfig != nil && settings.DefaultConfig.BuilderConfig != nil {
+				builderConfig = settings.DefaultConfig.BuilderConfig.Clone()
 			}
-
 			settings.ProposeConfig[bytesutil.ToBytes48(validatorKey)] = &validatorServiceConfig.ProposerOption{
 				FeeRecipientConfig: &validatorServiceConfig.FeeRecipientConfig{
 					FeeRecipient: feeRecipient,
 				},
 				BuilderConfig: builderConfig,
 			}
-
-			s.validatorService.SetProposerSettings(settings)
 		}
+	}
+	// save the settings
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set proposer settings: %v", err)
 	}
 	// override the 200 success with 202 according to the specs
 	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", "202")); err != nil {
@@ -678,6 +662,11 @@ func (s *Server) DeleteFeeRecipientByPubkey(ctx context.Context, req *ethpbservi
 		}
 	}
 
+	// save the settings
+	if err := s.validatorService.SetProposerSettings(ctx, settings); err != nil {
+		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set proposer settings: %v", err)
+	}
+
 	// override the 200 success with 204 according to the specs
 	if err := grpc.SetHeader(ctx, metadata.Pairs("x-http-code", "204")); err != nil {
 		return &empty.Empty{}, status.Errorf(codes.Internal, "Could not set custom success code header: %v", err)
@@ -691,4 +680,52 @@ func validatePublicKey(pubkey []byte) error {
 			codes.InvalidArgument, "Provided public key in path is not byte length %d and not a valid bls public key", fieldparams.BLSPubkeyLength)
 	}
 	return nil
+}
+
+// SetVoluntaryExit creates a signed voluntary exit message and returns a VoluntaryExit object.
+func (s *Server) SetVoluntaryExit(ctx context.Context, req *ethpbservice.SetVoluntaryExitRequest) (*ethpbservice.SetVoluntaryExitResponse, error) {
+	if s.validatorService == nil {
+		return nil, status.Error(codes.FailedPrecondition, "Validator service not ready")
+	}
+	if err := validatePublicKey(req.Pubkey); err != nil {
+		return nil, status.Error(codes.FailedPrecondition, err.Error())
+	}
+	if s.wallet == nil {
+		return nil, status.Error(codes.FailedPrecondition, "No wallet found")
+	}
+	km, err := s.validatorService.Keymanager()
+	if err != nil {
+		return nil, err
+	}
+	if req.Epoch == 0 {
+		genesisResponse, err := s.beaconNodeClient.GetGenesis(ctx, &emptypb.Empty{})
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not create voluntary exit: %v", err)
+		}
+		epoch, err := client.CurrentEpoch(genesisResponse.GenesisTime)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "gRPC call to get genesis time failed: %v", err)
+		}
+		req.Epoch = epoch
+	}
+	sve, err := client.CreateSignedVoluntaryExit(
+		ctx,
+		s.beaconNodeValidatorClient,
+		km.Sign,
+		req.Pubkey,
+		req.Epoch,
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not create voluntary exit: %v", err)
+	}
+
+	return &ethpbservice.SetVoluntaryExitResponse{
+		Data: &ethpbservice.SetVoluntaryExitResponse_SignedVoluntaryExit{
+			Message: &ethpbservice.SetVoluntaryExitResponse_SignedVoluntaryExit_VoluntaryExit{
+				Epoch:          uint64(sve.Exit.Epoch),
+				ValidatorIndex: uint64(sve.Exit.ValidatorIndex),
+			},
+			Signature: sve.Signature,
+		},
+	}, nil
 }

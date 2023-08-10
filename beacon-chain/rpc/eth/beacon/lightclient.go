@@ -9,13 +9,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	lightclienthelpers "github.com/prysmaticlabs/prysm/v3/beacon-chain/rpc/eth/helpers/lightclient"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
+	lightclienthelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 )
 
 // GetLightClientBootstrap - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/bootstrap.yaml
@@ -35,7 +35,7 @@ func (bs *Server) GetLightClientBootstrap(ctx context.Context, req *ethpbv2.Ligh
 	}
 
 	// Get the state
-	state, err := bs.StateFetcher.StateBySlot(ctx, blk.Block().Slot())
+	state, err := bs.Stater.StateBySlot(ctx, blk.Block().Slot())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state by slot: %v", err)
 	}
@@ -108,7 +108,7 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		var state state.BeaconState
 		var block interfaces.ReadOnlySignedBeaconBlock
 		for lSlot := lLastSlotInPeriod; lSlot >= lFirstSlotInPeriod; lSlot-- {
-			state, err = bs.StateFetcher.StateBySlot(ctx, types.Slot(lSlot))
+			state, err = bs.Stater.StateBySlot(ctx, types.Slot(lSlot))
 			if err != nil {
 				continue
 			}
@@ -156,7 +156,7 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 		}
 
 		attestedSlot := attestedBlock.Block().Slot()
-		attestedState, err := bs.StateFetcher.StateBySlot(ctx, attestedSlot)
+		attestedState, err := bs.Stater.StateBySlot(ctx, attestedSlot)
 		if err != nil {
 			continue
 		}
@@ -217,7 +217,7 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get block and state: %v", err)
 	}
 
-	state, err := bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
+	state, err := bs.Stater.StateBySlot(ctx, block.Block().Slot())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
 	}
@@ -230,7 +230,7 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 	}
 
 	attestedSlot := attestedBlock.Block().Slot()
-	attestedState, err := bs.StateFetcher.StateBySlot(ctx, attestedSlot)
+	attestedState, err := bs.Stater.StateBySlot(ctx, attestedSlot)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
 	}
@@ -285,7 +285,7 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 		return nil, status.Errorf(codes.Internal, "Could not get block and state: %v", err)
 	}
 
-	state, err := bs.StateFetcher.StateBySlot(ctx, block.Block().Slot())
+	state, err := bs.Stater.StateBySlot(ctx, block.Block().Slot())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
 	}
@@ -298,7 +298,7 @@ func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
 	}
 
 	attestedSlot := attestedBlock.Block().Slot()
-	attestedState, err := bs.StateFetcher.StateBySlot(ctx, attestedSlot)
+	attestedState, err := bs.Stater.StateBySlot(ctx, attestedSlot)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
 	}

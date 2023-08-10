@@ -3,19 +3,18 @@ package fieldtrie
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
 	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	customtypes "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native/custom-types"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native/types"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stateutil"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
+	customtypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/custom-types"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native/types"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stateutil"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
 )
 
 func Test_handlePendingAttestation_OutOfRange(t *testing.T) {
@@ -254,6 +253,10 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 				elements: []*ethpb.Eth1Data{
 					{
 						DepositRoot:  make([]byte, fieldparams.RootLength),
+						DepositCount: 2,
+					},
+					{
+						DepositRoot:  make([]byte, fieldparams.RootLength),
 						DepositCount: 1,
 					},
 				},
@@ -270,7 +273,7 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 				convertAll: true,
 			},
 			wantHex: nil,
-			errMsg:  fmt.Sprintf("Wanted type of %v", reflect.TypeOf([]*ethpb.Eth1Data{}).Name()),
+			errMsg:  fmt.Sprintf("Wanted type of %T", []*ethpb.Eth1Data{}),
 		},
 		{
 			name: "Balance",
@@ -305,7 +308,7 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 				convertAll: true,
 			},
 			wantHex: nil,
-			errMsg:  fmt.Sprintf("Wanted type of %v", reflect.TypeOf([]*ethpb.Validator{}).Name()),
+			errMsg:  fmt.Sprintf("Wanted type of %T", []*ethpb.Validator{}),
 		},
 		{
 			name: "Attestations",
@@ -322,11 +325,14 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 			wantHex: []string{"0x7d7696e7f12593934afcd87a0d38e1a981bee63cb4cf0568ba36a6e0596eeccb"},
 		},
 		{
-			name: "Attestations",
+			name: "Attestations convertAll false",
 			args: &args{
 				field:   types.FieldIndex(15),
 				indices: []uint64{1},
 				elements: []*ethpb.PendingAttestation{
+					{
+						ProposerIndex: 0,
+					},
 					{
 						ProposerIndex: 1,
 					},
@@ -353,8 +359,12 @@ func TestFieldTrie_NativeState_fieldConvertersNative(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			roots, err := fieldConverters(tt.args.field, tt.args.indices, tt.args.elements, tt.args.convertAll)
-			if err != nil && tt.errMsg != "" {
-				require.ErrorContains(t, tt.errMsg, err)
+			if err != nil {
+				if tt.errMsg != "" {
+					require.ErrorContains(t, tt.errMsg, err)
+				} else {
+					t.Error("Unexpected error: " + err.Error())
+				}
 			} else {
 				for i, root := range roots {
 					hex := hexutil.Encode(root[:])

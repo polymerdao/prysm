@@ -14,11 +14,11 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/go-bitfield"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	ecdsaprysm "github.com/prysmaticlabs/prysm/v3/crypto/ecdsa"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	ecdsaprysm "github.com/prysmaticlabs/prysm/v4/crypto/ecdsa"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 )
 
 // Listener defines the discovery V5 network interface that is used
@@ -332,7 +332,7 @@ func (s *Service) isPeerAtLimit(inbound bool) bool {
 	return activePeers >= maxPeers || numOfConns >= maxPeers
 }
 
-// PeersFromStringAddrs convers peer raw ENRs into multiaddrs for p2p.
+// PeersFromStringAddrs converts peer raw ENRs into multiaddrs for p2p.
 func PeersFromStringAddrs(addrs []string) ([]ma.Multiaddr, error) {
 	var allAddrs []ma.Multiaddr
 	enodeString, multiAddrString := parseGenericAddrs(addrs)
@@ -458,6 +458,19 @@ func convertToUdpMultiAddr(node *enode.Node) ([]ma.Multiaddr, error) {
 	}
 
 	return addresses, nil
+}
+
+func peerIdsFromMultiAddrs(addrs []ma.Multiaddr) []peer.ID {
+	peers := []peer.ID{}
+	for _, a := range addrs {
+		info, err := peer.AddrInfoFromP2pAddr(a)
+		if err != nil {
+			log.WithError(err).Errorf("Could not derive peer info from multiaddress %s", a.String())
+			continue
+		}
+		peers = append(peers, info.ID)
+	}
+	return peers
 }
 
 func multiAddrFromString(address string) (ma.Multiaddr, error) {

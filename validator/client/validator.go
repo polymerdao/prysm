@@ -20,28 +20,28 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/async/event"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v3/config/features"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	validatorserviceconfig "github.com/prysmaticlabs/prysm/v3/config/validator/service"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
-	accountsiface "github.com/prysmaticlabs/prysm/v3/validator/accounts/iface"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v3/validator/client/iface"
-	vdb "github.com/prysmaticlabs/prysm/v3/validator/db"
-	"github.com/prysmaticlabs/prysm/v3/validator/db/kv"
-	"github.com/prysmaticlabs/prysm/v3/validator/graffiti"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v3/validator/keymanager/remote-web3signer"
+	"github.com/prysmaticlabs/prysm/v4/async/event"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	validatorserviceconfig "github.com/prysmaticlabs/prysm/v4/config/validator/service"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	accountsiface "github.com/prysmaticlabs/prysm/v4/validator/accounts/iface"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
+	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
+	vdb "github.com/prysmaticlabs/prysm/v4/validator/db"
+	"github.com/prysmaticlabs/prysm/v4/validator/db/kv"
+	"github.com/prysmaticlabs/prysm/v4/validator/graffiti"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	remoteweb3signer "github.com/prysmaticlabs/prysm/v4/validator/keymanager/remote-web3signer"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
@@ -56,6 +56,7 @@ import (
 var (
 	keyRefetchPeriod                = 30 * time.Second
 	ErrBuilderValidatorRegistration = errors.New("Builder API validator registration unsuccessful")
+	ErrValidatorsAllExited          = errors.New("All validators are exited, no more work to perform...")
 )
 
 var (
@@ -90,10 +91,10 @@ type validator struct {
 	interopKeysConfig                  *local.InteropKeymanagerConfig
 	wallet                             *wallet.Wallet
 	graffitiStruct                     *graffiti.Graffiti
-	node                               ethpb.NodeClient
-	slashingProtectionClient           ethpb.SlasherClient
+	node                               iface.NodeClient
+	slashingProtectionClient           iface.SlasherClient
 	db                                 vdb.Database
-	beaconClient                       ethpb.BeaconChainClient
+	beaconClient                       iface.BeaconChainClient
 	keyManager                         keymanager.IKeymanager
 	ticker                             slots.Ticker
 	validatorClient                    iface.ValidatorClient
@@ -603,6 +604,16 @@ func (v *validator) UpdateDuties(ctx context.Context, slot primitives.Slot) erro
 		return err
 	}
 
+	allExitedCounter := 0
+	for i := range resp.CurrentEpochDuties {
+		if resp.CurrentEpochDuties[i].Status == ethpb.ValidatorStatus_EXITED {
+			allExitedCounter++
+		}
+	}
+	if allExitedCounter != 0 && allExitedCounter == len(resp.CurrentEpochDuties) {
+		return ErrValidatorsAllExited
+	}
+
 	v.duties = resp
 	v.logDuties(slot, v.duties.CurrentEpochDuties)
 
@@ -725,7 +736,6 @@ func (v *validator) RolesAt(ctx context.Context, slot primitives.Slot) (map[[fie
 			if aggregator {
 				roles = append(roles, iface.RoleAggregator)
 			}
-
 		}
 
 		// Being assigned to a sync committee for a given slot means that the validator produces and
@@ -845,38 +855,6 @@ func (v *validator) UpdateDomainDataCaches(ctx context.Context, slot primitives.
 	}
 }
 
-// AllValidatorsAreExited informs whether all validators have already exited.
-func (v *validator) AllValidatorsAreExited(ctx context.Context) (bool, error) {
-	validatingKeys, err := v.keyManager.FetchValidatingPublicKeys(ctx)
-	if err != nil {
-		return false, errors.Wrap(err, "could not fetch validating keys")
-	}
-	if len(validatingKeys) == 0 {
-		return false, nil
-	}
-	var publicKeys [][]byte
-	for _, key := range validatingKeys {
-		copyKey := key
-		publicKeys = append(publicKeys, copyKey[:])
-	}
-	request := &ethpb.MultipleValidatorStatusRequest{
-		PublicKeys: publicKeys,
-	}
-	response, err := v.validatorClient.MultipleValidatorStatus(ctx, request)
-	if err != nil {
-		return false, err
-	}
-	if len(response.Statuses) != len(request.PublicKeys) {
-		return false, errors.New("number of status responses did not match number of requested keys")
-	}
-	for _, status := range response.Statuses {
-		if status.Status != ethpb.ValidatorStatus_EXITED {
-			return false, nil
-		}
-	}
-	return true, nil
-}
-
 func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, domain []byte) (*ethpb.DomainResponse, error) {
 	v.domainDataLock.Lock()
 	defer v.domainDataLock.Unlock()
@@ -896,7 +874,6 @@ func (v *validator) domainData(ctx context.Context, epoch primitives.Epoch, doma
 	if err != nil {
 		return nil, err
 	}
-
 	v.domainDataCache.Set(key, proto.Clone(res), 1)
 
 	return res, nil
@@ -976,22 +953,30 @@ func (v *validator) logDuties(slot primitives.Slot, duties []*ethpb.DutiesRespon
 	}
 }
 
+// ProposerSettings gets the current proposer settings saved in memory validator
 func (v *validator) ProposerSettings() *validatorserviceconfig.ProposerSettings {
 	return v.proposerSettings
 }
 
-func (v *validator) SetProposerSettings(settings *validatorserviceconfig.ProposerSettings) {
+// SetProposerSettings sets and saves the passed in proposer settings overriding the in memory one
+func (v *validator) SetProposerSettings(ctx context.Context, settings *validatorserviceconfig.ProposerSettings) error {
+	if v.db == nil {
+		return errors.New("db is not set")
+	}
+	if err := v.db.SaveProposerSettings(ctx, settings); err != nil {
+		return err
+	}
 	v.proposerSettings = settings
+	return nil
 }
 
 // PushProposerSettings calls the prepareBeaconProposer RPC to set the fee recipient and also the register validator API if using a custom builder.
-func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKeymanager) error {
+func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, deadline time.Time) error {
 	if km == nil {
 		return errors.New("keymanager is nil when calling PrepareBeaconProposer")
 	}
-
-	deadline := v.SlotDeadline(slots.RoundUpToNearestEpoch(slots.CurrentSlot(v.genesisTime)))
-	ctx, cancel := context.WithDeadline(ctx, deadline)
+	nctx, cancel := context.WithDeadline(ctx, deadline)
+	ctx = nctx
 	defer cancel()
 
 	pubkeys, err := km.FetchValidatingPublicKeys(ctx)
@@ -1002,7 +987,11 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 		log.Info("No imported public keys. Skipping prepare proposer routine")
 		return nil
 	}
-	proposerReqs, err := v.buildPrepProposerReqs(ctx, pubkeys)
+	filteredKeys, err := v.filterAndCacheActiveKeys(ctx, pubkeys, slot)
+	if err != nil {
+		return err
+	}
+	proposerReqs, err := v.buildPrepProposerReqs(ctx, filteredKeys)
 	if err != nil {
 		return err
 	}
@@ -1012,9 +1001,9 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 	}
 	if len(proposerReqs) != len(pubkeys) {
 		log.WithFields(logrus.Fields{
-			"pubkeysCount": len(pubkeys),
-			"reqCount":     len(proposerReqs),
-		}).Debugln("Prepare proposer request did not success with all pubkeys")
+			"pubkeysCount":             len(pubkeys),
+			"proposerSettingsReqCount": len(proposerReqs),
+		}).Debugln("Request count did not match included validator count. Only keys that have been activated will be included in the request.")
 	}
 	if _, err := v.validatorClient.PrepareBeaconProposer(ctx, &ethpb.PrepareBeaconProposerRequest{
 		Recipients: proposerReqs,
@@ -1022,7 +1011,7 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 		return err
 	}
 
-	signedRegReqs, err := v.buildSignedRegReqs(ctx, pubkeys, km.Sign)
+	signedRegReqs, err := v.buildSignedRegReqs(ctx, filteredKeys, km.Sign)
 	if err != nil {
 		return err
 	}
@@ -1033,9 +1022,52 @@ func (v *validator) PushProposerSettings(ctx context.Context, km keymanager.IKey
 	return nil
 }
 
-func (v *validator) buildPrepProposerReqs(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte) ([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, error) {
-	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
+func (v *validator) filterAndCacheActiveKeys(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, slot primitives.Slot) ([][fieldparams.BLSPubkeyLength]byte, error) {
+	filteredKeys := make([][fieldparams.BLSPubkeyLength]byte, 0)
+	statusRequestKeys := make([][]byte, 0)
+	for _, k := range pubkeys {
+		_, ok := v.pubkeyToValidatorIndex[k]
+		// Get validator index from RPC server if not found.
+		if !ok {
+			i, ok, err := v.validatorIndex(ctx, k)
+			if err != nil {
+				return nil, err
+			}
+			if !ok { // Nothing we can do if RPC server doesn't have validator index.
+				continue
+			}
+			v.pubkeyToValidatorIndex[k] = i
+		}
+		copiedk := k
+		statusRequestKeys = append(statusRequestKeys, copiedk[:])
+	}
+	resp, err := v.validatorClient.MultipleValidatorStatus(ctx, &ethpb.MultipleValidatorStatusRequest{
+		PublicKeys: statusRequestKeys,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i, status := range resp.Statuses {
+		// skip registration creation if validator is not active status
+		nonActive := status.Status != ethpb.ValidatorStatus_ACTIVE
+		// Handle edge case at the start of the epoch with newly activated validators
+		currEpoch := primitives.Epoch(slot / params.BeaconConfig().SlotsPerEpoch)
+		currActivated := status.Status == ethpb.ValidatorStatus_PENDING && currEpoch >= status.ActivationEpoch
+		if nonActive && !currActivated {
+			log.WithFields(logrus.Fields{
+				"publickey": hexutil.Encode(resp.PublicKeys[i]),
+				"status":    status.Status.String(),
+			}).Debugf("skipping non active status key.")
+			continue
+		}
+		filteredKeys = append(filteredKeys, bytesutil.ToBytes48(resp.PublicKeys[i]))
+	}
 
+	return filteredKeys, nil
+}
+
+func (v *validator) buildPrepProposerReqs(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte /* only active pubkeys */) ([]*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer, error) {
+	var prepareProposerReqs []*ethpb.PrepareBeaconProposerRequest_FeeRecipientContainer
 	for _, k := range pubkeys {
 		// Default case: Define fee recipient to burn address
 		var feeRecipient common.Address
@@ -1047,22 +1079,6 @@ func (v *validator) buildPrepProposerReqs(ctx context.Context, pubkeys [][fieldp
 			isFeeRecipientDefined = true
 		}
 
-		validatorIndex, ok := v.pubkeyToValidatorIndex[k]
-		// Get validator index from RPC server if not found.
-		if !ok {
-			i, ok, err := v.validatorIndex(ctx, k)
-			if err != nil {
-				return nil, err
-			}
-
-			if !ok { // Nothing we can do if RPC server doesn't have validator index.
-				continue
-			}
-
-			validatorIndex = i
-			v.pubkeyToValidatorIndex[k] = i
-		}
-
 		// If fee recipient is defined for this specific pubkey in proposer configuration, use it
 		if v.ProposerSettings() != nil && v.ProposerSettings().ProposeConfig != nil {
 			config, ok := v.ProposerSettings().ProposeConfig[k]
@@ -1071,6 +1087,11 @@ func (v *validator) buildPrepProposerReqs(ctx context.Context, pubkeys [][fieldp
 				feeRecipient = config.FeeRecipientConfig.FeeRecipient // Use file config for fee recipient.
 				isFeeRecipientDefined = true
 			}
+		}
+
+		validatorIndex, ok := v.pubkeyToValidatorIndex[k]
+		if !ok {
+			continue
 		}
 
 		if isFeeRecipientDefined {
@@ -1087,11 +1108,10 @@ func (v *validator) buildPrepProposerReqs(ctx context.Context, pubkeys [][fieldp
 			}
 		}
 	}
-
 	return prepareProposerReqs, nil
 }
 
-func (v *validator) buildSignedRegReqs(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte, signer iface.SigningFunc) ([]*ethpb.SignedValidatorRegistrationV1, error) {
+func (v *validator) buildSignedRegReqs(ctx context.Context, pubkeys [][fieldparams.BLSPubkeyLength]byte /* only active pubkeys */, signer iface.SigningFunc) ([]*ethpb.SignedValidatorRegistrationV1, error) {
 	var signedValRegRegs []*ethpb.SignedValidatorRegistrationV1
 
 	for i, k := range pubkeys {
@@ -1127,6 +1147,12 @@ func (v *validator) buildSignedRegReqs(ctx context.Context, pubkeys [][fieldpara
 		}
 
 		if !enabled {
+			continue
+		}
+
+		// map is populated before this function in buildPrepProposerReq
+		_, ok := v.pubkeyToValidatorIndex[k]
+		if !ok {
 			continue
 		}
 

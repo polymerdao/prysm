@@ -14,17 +14,17 @@ import (
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	cmdshared "github.com/prysmaticlabs/prysm/v3/cmd"
-	"github.com/prysmaticlabs/prysm/v3/cmd/beacon-chain/flags"
-	"github.com/prysmaticlabs/prysm/v3/cmd/beacon-chain/sync/genesis"
-	"github.com/prysmaticlabs/prysm/v3/config/features"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/io/file"
-	"github.com/prysmaticlabs/prysm/v3/testing/endtoend/helpers"
-	e2e "github.com/prysmaticlabs/prysm/v3/testing/endtoend/params"
-	e2etypes "github.com/prysmaticlabs/prysm/v3/testing/endtoend/types"
-	"github.com/prysmaticlabs/prysm/v3/testing/util"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	cmdshared "github.com/prysmaticlabs/prysm/v4/cmd"
+	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/flags"
+	"github.com/prysmaticlabs/prysm/v4/cmd/beacon-chain/sync/genesis"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/io/file"
+	"github.com/prysmaticlabs/prysm/v4/runtime/interop"
+	"github.com/prysmaticlabs/prysm/v4/testing/endtoend/helpers"
+	e2e "github.com/prysmaticlabs/prysm/v4/testing/endtoend/params"
+	e2etypes "github.com/prysmaticlabs/prysm/v4/testing/endtoend/types"
 )
 
 var _ e2etypes.ComponentRunner = (*BeaconNode)(nil)
@@ -268,7 +268,8 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 		fmt.Sprintf("--%s=%s", cmdshared.VerbosityFlag.Name, "debug"),
 		fmt.Sprintf("--%s=%d", flags.BlockBatchLimitBurstFactor.Name, 8),
 		fmt.Sprintf("--%s=%s", cmdshared.ChainConfigFileFlag.Name, cfgPath),
-		fmt.Sprintf("--%s", features.EnableOnlyBlindedBeaconBlocks.Name),
+		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=1",
+		"--" + cmdshared.ValidatorMonitorIndicesFlag.Name + "=2",
 		"--" + cmdshared.ForceClearDB.Name,
 		"--" + cmdshared.AcceptTosFlag.Name,
 		"--" + flags.EnableDebugRPCEndpoints.Name,
@@ -282,6 +283,9 @@ func (node *BeaconNode) Start(ctx context.Context) error {
 	// feature flags; this is to allow A-B testing on new features)
 	if !config.TestFeature || index%2 == 0 {
 		args = append(args, features.E2EBeaconChainFlags...)
+	}
+	if config.UseBuilder {
+		args = append(args, fmt.Sprintf("--%s=%s:%d", flags.MevRelayEndpoint.Name, "http://127.0.0.1", e2e.TestParams.Ports.Eth1ProxyPort+index))
 	}
 	args = append(args, config.BeaconFlags...)
 
@@ -354,5 +358,5 @@ func generateGenesis(ctx context.Context) (state.BeaconState, error) {
 	pcreds := e2e.TestParams.NumberOfExecutionCreds
 	nvals := params.BeaconConfig().MinGenesisActiveValidatorCount
 	version := e2etypes.GenesisFork()
-	return util.NewPreminedGenesis(ctx, t, nvals, pcreds, version, gb)
+	return interop.NewPreminedGenesis(ctx, t, nvals, pcreds, version, gb)
 }

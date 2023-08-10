@@ -3,28 +3,27 @@ package blockchain
 import (
 	"context"
 	"testing"
+	"time"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/cache"
-	testDB "github.com/prysmaticlabs/prysm/v3/beacon-chain/db/testing"
-	mockExecution "github.com/prysmaticlabs/prysm/v3/beacon-chain/execution/testing"
-	doublylinkedtree "github.com/prysmaticlabs/prysm/v3/beacon-chain/forkchoice/doubly-linked-tree"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state/stategen"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	"github.com/prysmaticlabs/prysm/v3/testing/util"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/cache"
+	testDB "github.com/prysmaticlabs/prysm/v4/beacon-chain/db/testing"
+	mockExecution "github.com/prysmaticlabs/prysm/v4/beacon-chain/execution/testing"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/testing/util"
 	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestService_isNewProposer(t *testing.T) {
 	beaconDB := testDB.SetupDB(t)
 	service := setupBeaconChain(t, beaconDB)
-	require.Equal(t, false, service.isNewProposer())
+	require.Equal(t, false, service.isNewProposer(service.CurrentSlot()+1))
 
 	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(service.CurrentSlot()+1, 0, [8]byte{}, [32]byte{} /* root */)
-	require.Equal(t, true, service.isNewProposer())
+	require.Equal(t, true, service.isNewProposer(service.CurrentSlot()+1))
 }
 
 func TestService_isNewHead(t *testing.T) {
@@ -75,7 +74,8 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
 	service.cfg.ProposerSlotIndexCache = cache.NewProposerPayloadIDsCache()
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, service.headRoot()))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, service.headRoot(), service.CurrentSlot()+1)
+	require.NoError(t, err)
 	hookErr := "could not notify forkchoice update"
 	invalidStateErr := "could not get state summary: could not find block in DB"
 	require.LogsDoNotContain(t, hook, invalidStateErr)
@@ -83,7 +83,8 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 	gb, err := blocks.NewSignedBeaconBlock(util.NewBeaconBlock())
 	require.NoError(t, err)
 	require.NoError(t, service.saveInitSyncBlock(ctx, [32]byte{'a'}, gb))
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, [32]byte{'a'}))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, [32]byte{'a'}, service.CurrentSlot()+1)
+	require.NoError(t, err)
 	require.LogsContain(t, hook, invalidStateErr)
 
 	hook.Reset()
@@ -107,7 +108,8 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		state: st,
 	}
 	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(2, 1, [8]byte{1}, [32]byte{2})
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, r1))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, r1, service.CurrentSlot())
+	require.NoError(t, err)
 	require.LogsDoNotContain(t, hook, invalidStateErr)
 	require.LogsDoNotContain(t, hook, hookErr)
 
@@ -124,7 +126,8 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 		state: st,
 	}
 	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(2, 1, [8]byte{1}, [32]byte{2})
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, r1))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, r1, service.CurrentSlot()+1)
+	require.NoError(t, err)
 	require.LogsDoNotContain(t, hook, invalidStateErr)
 	require.LogsDoNotContain(t, hook, hookErr)
 	vId, payloadID, has := service.cfg.ProposerSlotIndexCache.GetProposerPayloadIDs(2, [32]byte{2})
@@ -134,27 +137,20 @@ func TestService_forkchoiceUpdateWithExecution_exceptionalCases(t *testing.T) {
 
 	// Test zero headRoot returns immediately.
 	headRoot := service.headRoot()
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, [32]byte{}))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, [32]byte{}, service.CurrentSlot()+1)
+	require.NoError(t, err)
 	require.Equal(t, service.headRoot(), headRoot)
 }
 
 func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testing.T) {
-	ctx := context.Background()
-	beaconDB := testDB.SetupDB(t)
+	service, tr := minimalTestService(t)
+	ctx, beaconDB, fcs := tr.ctx, tr.db, tr.fcs
+
 	altairBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockAltair())
 	altairBlkRoot, err := altairBlk.Block().HashTreeRoot()
 	require.NoError(t, err)
 	bellatrixBlk := util.SaveBlock(t, ctx, beaconDB, util.NewBeaconBlockBellatrix())
 	bellatrixBlkRoot, err := bellatrixBlk.Block().HashTreeRoot()
-	require.NoError(t, err)
-	fcs := doublylinkedtree.New()
-	opts := []Option{
-		WithDatabase(beaconDB),
-		WithStateGen(stategen.New(beaconDB, fcs)),
-		WithForkChoiceStore(fcs),
-		WithProposerIdsCache(cache.NewProposerPayloadIDsCache()),
-	}
-	service, err := NewService(ctx, opts...)
 	require.NoError(t, err)
 	st, _ := util.DeterministicGenesisState(t, 10)
 	service.head = &head{
@@ -184,7 +180,45 @@ func TestService_forkchoiceUpdateWithExecution_SameHeadRootNewProposer(t *testin
 
 	// Set head to be the same but proposing next slot
 	service.head.root = r
+	service.head.block = sb
+	service.head.state = st
 	service.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(service.CurrentSlot()+1, 0, [8]byte{}, [32]byte{} /* root */)
-	require.NoError(t, service.forkchoiceUpdateWithExecution(ctx, r))
+	_, err = service.forkchoiceUpdateWithExecution(ctx, r, service.CurrentSlot()+1)
+	require.NoError(t, err)
 
+}
+
+func TestShouldOverrideFCU(t *testing.T) {
+	hook := logTest.NewGlobal()
+	service, tr := minimalTestService(t)
+	ctx, fcs := tr.ctx, tr.fcs
+
+	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot) * time.Second))
+	headRoot := [32]byte{'b'}
+	parentRoot := [32]byte{'a'}
+	ojc := &ethpb.Checkpoint{}
+	st, root, err := prepareForkchoiceState(ctx, 1, parentRoot, [32]byte{}, [32]byte{}, ojc, ojc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, root))
+	st, root, err = prepareForkchoiceState(ctx, 2, headRoot, parentRoot, [32]byte{}, ojc, ojc)
+	require.NoError(t, err)
+	require.NoError(t, fcs.InsertNode(ctx, st, root))
+
+	require.Equal(t, primitives.Slot(2), service.CurrentSlot())
+	require.Equal(t, true, service.shouldOverrideFCU(headRoot, 2))
+	require.LogsDoNotContain(t, hook, "12 seconds")
+	require.Equal(t, false, service.shouldOverrideFCU(parentRoot, 2))
+	require.LogsContain(t, hook, "12 seconds")
+
+	head, err := fcs.Head(ctx)
+	require.NoError(t, err)
+	require.Equal(t, headRoot, head)
+
+	fcs.SetGenesisTime(uint64(time.Now().Unix()) - 29)
+	require.Equal(t, true, service.shouldOverrideFCU(parentRoot, 3))
+	require.LogsDoNotContain(t, hook, "10 seconds")
+	fcs.SetGenesisTime(uint64(time.Now().Unix()) - 24)
+	service.SetGenesisTime(time.Now().Add(-time.Duration(2*params.BeaconConfig().SecondsPerSlot+10) * time.Second))
+	require.Equal(t, false, service.shouldOverrideFCU(parentRoot, 3))
+	require.LogsContain(t, hook, "10 seconds")
 }

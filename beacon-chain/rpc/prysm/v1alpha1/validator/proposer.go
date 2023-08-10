@@ -5,25 +5,28 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	emptypb "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/builder"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed"
-	blockfeed "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/feed/block"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/builder"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed"
+	blockfeed "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/feed/block"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
@@ -33,7 +36,11 @@ import (
 // eth1DataNotification is a latch to stop flooding logs with the same warning.
 var eth1DataNotification bool
 
-const eth1dataTimeout = 2 * time.Second
+const (
+	// CouldNotDecodeBlock means that a signed beacon block couldn't be created from the block present in the request.
+	CouldNotDecodeBlock = "Could not decode block"
+	eth1dataTimeout     = 2 * time.Second
+)
 
 // GetBeaconBlock is called by a proposer during its assigned slot to request a block to sign
 // by passing in the slot and the signed randao reveal of the slot.
@@ -42,13 +49,26 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	defer span.End()
 	span.AddAttributes(trace.Int64Attribute("slot", int64(req.Slot)))
 
+	t, err := slots.ToTime(uint64(vs.TimeFetcher.GenesisTime().Unix()), req.Slot)
+	if err != nil {
+		log.WithError(err).Error("Could not convert slot to time")
+	}
+	log.WithFields(logrus.Fields{
+		"slot":               req.Slot,
+		"sinceSlotStartTime": time.Since(t),
+	}).Info("Begin building block")
+
 	// A syncing validator should not produce a block.
 	if vs.SyncChecker.Syncing() {
 		return nil, status.Error(codes.Unavailable, "Syncing to latest head, not ready to respond")
 	}
 
-	if err := vs.HeadUpdater.UpdateHead(ctx); err != nil {
-		log.WithError(err).Error("Could not process attestations and update head")
+	// process attestations and update head in forkchoice
+	vs.ForkchoiceFetcher.UpdateHead(ctx, vs.TimeFetcher.CurrentSlot())
+	headRoot := vs.ForkchoiceFetcher.CachedHeadRoot()
+	parentRoot := vs.ForkchoiceFetcher.GetProposerHead()
+	if parentRoot != headRoot {
+		blockchain.LateBlockAttemptedReorgCount.Inc()
 	}
 
 	// An optimistic validator MUST NOT produce a block (i.e., sign across the DOMAIN_BEACON_PROPOSER domain).
@@ -62,15 +82,11 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not prepare block: %v", err)
 	}
-	parentRoot, err := vs.HeadFetcher.HeadRoot(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not get head root: %v", err)
-	}
 	head, err := vs.HeadFetcher.HeadState(ctx)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
 	}
-	head, err = transition.ProcessSlotsUsingNextSlotCache(ctx, head, parentRoot, req.Slot)
+	head, err = transition.ProcessSlotsUsingNextSlotCache(ctx, head, parentRoot[:], req.Slot)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not process slots up to %d: %v", req.Slot, err)
 	}
@@ -79,26 +95,7 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	sBlk.SetSlot(req.Slot)
 	sBlk.SetGraffiti(req.Graffiti)
 	sBlk.SetRandaoReveal(req.RandaoReveal)
-	sBlk.SetParentRoot(parentRoot)
-
-	// Set eth1 data.
-	eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
-	if err != nil {
-		eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
-		log.WithError(err).Error("Could not get eth1data")
-	}
-	sBlk.SetEth1Data(eth1Data)
-
-	// Set deposit and attestation.
-	deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, eth1Data) // TODO: split attestations and deposits
-	if err != nil {
-		sBlk.SetDeposits([]*ethpb.Deposit{})
-		sBlk.SetAttestations([]*ethpb.Attestation{})
-		log.WithError(err).Error("Could not pack deposits and attestations")
-	} else {
-		sBlk.SetDeposits(deposits)
-		sBlk.SetAttestations(atts)
-	}
+	sBlk.SetParentRoot(parentRoot[:])
 
 	// Set proposer index.
 	idx, err := helpers.BeaconProposerIndex(ctx, head)
@@ -107,30 +104,70 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	}
 	sBlk.SetProposerIndex(idx)
 
-	// Set slashings.
-	validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
-	sBlk.SetProposerSlashings(validProposerSlashings)
-	sBlk.SetAttesterSlashings(validAttSlashings)
+	if features.Get().BuildBlockParallel {
+		if err := vs.BuildBlockParallel(ctx, sBlk, head); err != nil {
+			return nil, errors.Wrap(err, "could not build block in parallel")
+		}
+	} else {
+		// Set eth1 data.
+		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
+		if err != nil {
+			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
+			log.WithError(err).Error("Could not get eth1data")
+		}
+		sBlk.SetEth1Data(eth1Data)
 
-	// Set exits.
-	sBlk.SetVoluntaryExits(vs.getExits(head, req.Slot))
+		// Set deposit and attestation.
+		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, eth1Data) // TODO: split attestations and deposits
+		if err != nil {
+			sBlk.SetDeposits([]*ethpb.Deposit{})
+			sBlk.SetAttestations([]*ethpb.Attestation{})
+			log.WithError(err).Error("Could not pack deposits and attestations")
+		} else {
+			sBlk.SetDeposits(deposits)
+			sBlk.SetAttestations(atts)
+		}
 
-	// Set sync aggregate. New in Altair.
-	vs.setSyncAggregate(ctx, sBlk)
+		// Set slashings.
+		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
+		sBlk.SetProposerSlashings(validProposerSlashings)
+		sBlk.SetAttesterSlashings(validAttSlashings)
 
-	// Set execution data. New in Bellatrix.
-	if err := vs.setExecutionData(ctx, sBlk, head); err != nil {
-		return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+		// Set exits.
+		sBlk.SetVoluntaryExits(vs.getExits(head, req.Slot))
+
+		// Set sync aggregate. New in Altair.
+		vs.setSyncAggregate(ctx, sBlk)
+
+		// Get local and builder (if enabled) payloads. Set execution data. New in Bellatrix.
+		localPayload, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not get local payload: %v", err)
+		}
+		builderPayload, err := vs.getBuilderPayload(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+		if err != nil {
+			builderGetPayloadMissCount.Inc()
+			log.WithError(err).Error("Could not get builder payload")
+		}
+		if err := setExecutionData(ctx, sBlk, localPayload, builderPayload); err != nil {
+			return nil, status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+		}
+
+		// Set bls to execution change. New in Capella.
+		vs.setBlsToExecData(sBlk, head)
 	}
-
-	// Set bls to execution change. New in Capella.
-	vs.setBlsToExecData(sBlk, head)
 
 	sr, err := vs.computeStateRoot(ctx, sBlk)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Could not compute state root: %v", err)
 	}
 	sBlk.SetStateRoot(sr)
+
+	log.WithFields(logrus.Fields{
+		"slot":               req.Slot,
+		"sinceSlotStartTime": time.Since(t),
+		"validator":          sBlk.Block().ProposerIndex(),
+	}).Info("Finished building block")
 
 	pb, err := sBlk.Block().Proto()
 	if err != nil {
@@ -154,6 +191,67 @@ func (vs *Server) GetBeaconBlock(ctx context.Context, req *ethpb.BlockRequest) (
 	return &ethpb.GenericBeaconBlock{Block: &ethpb.GenericBeaconBlock_Phase0{Phase0: pb.(*ethpb.BeaconBlock)}}, nil
 }
 
+func (vs *Server) BuildBlockParallel(ctx context.Context, sBlk interfaces.SignedBeaconBlock, head state.BeaconState) error {
+	// Build consensus fields in background
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		// Set eth1 data.
+		eth1Data, err := vs.eth1DataMajorityVote(ctx, head)
+		if err != nil {
+			eth1Data = &ethpb.Eth1Data{DepositRoot: params.BeaconConfig().ZeroHash[:], BlockHash: params.BeaconConfig().ZeroHash[:]}
+			log.WithError(err).Error("Could not get eth1data")
+		}
+		sBlk.SetEth1Data(eth1Data)
+
+		// Set deposit and attestation.
+		deposits, atts, err := vs.packDepositsAndAttestations(ctx, head, eth1Data) // TODO: split attestations and deposits
+		if err != nil {
+			sBlk.SetDeposits([]*ethpb.Deposit{})
+			sBlk.SetAttestations([]*ethpb.Attestation{})
+			log.WithError(err).Error("Could not pack deposits and attestations")
+		} else {
+			sBlk.SetDeposits(deposits)
+			sBlk.SetAttestations(atts)
+		}
+
+		// Set slashings.
+		validProposerSlashings, validAttSlashings := vs.getSlashings(ctx, head)
+		sBlk.SetProposerSlashings(validProposerSlashings)
+		sBlk.SetAttesterSlashings(validAttSlashings)
+
+		// Set exits.
+		sBlk.SetVoluntaryExits(vs.getExits(head, sBlk.Block().Slot()))
+
+		// Set sync aggregate. New in Altair.
+		vs.setSyncAggregate(ctx, sBlk)
+
+		// Set bls to execution change. New in Capella.
+		vs.setBlsToExecData(sBlk, head)
+	}()
+
+	localPayload, err := vs.getLocalPayload(ctx, sBlk.Block(), head)
+	if err != nil {
+		return status.Errorf(codes.Internal, "Could not get local payload: %v", err)
+	}
+
+	builderPayload, err := vs.getBuilderPayload(ctx, sBlk.Block().Slot(), sBlk.Block().ProposerIndex())
+	if err != nil {
+		builderGetPayloadMissCount.Inc()
+		log.WithError(err).Error("Could not get builder payload")
+	}
+
+	if err := setExecutionData(ctx, sBlk, localPayload, builderPayload); err != nil {
+		return status.Errorf(codes.Internal, "Could not set execution data: %v", err)
+	}
+
+	wg.Wait() // Wait until block is built via consensus and execution fields.
+
+	return nil
+}
+
 // ProposeBeaconBlock is called by a proposer during its assigned slot to create a block in an attempt
 // to get it processed by the beacon node as the canonical head.
 func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSignedBeaconBlock) (*ethpb.ProposeResponse, error) {
@@ -161,7 +259,7 @@ func (vs *Server) ProposeBeaconBlock(ctx context.Context, req *ethpb.GenericSign
 	defer span.End()
 	blk, err := blocks.NewSignedBeaconBlock(req.Block)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "Could not decode block: %v", err)
+		return nil, status.Errorf(codes.InvalidArgument, "%s: %v", CouldNotDecodeBlock, err)
 	}
 	return vs.proposeGenericBeaconBlock(ctx, blk)
 }
@@ -228,7 +326,6 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 			log.WithError(err).Error("An error occurred while retrieving validator index")
 			return nil, err
 		}
-
 	}
 	address, err := vs.BeaconDB.FeeRecipientByValidatorID(ctx, resp.GetIndex())
 	if err != nil {
@@ -246,35 +343,18 @@ func (vs *Server) GetFeeRecipientByPubKey(ctx context.Context, request *ethpb.Fe
 	}, nil
 }
 
-func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*ethpb.ProposeResponse, error) {
+func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk interfaces.SignedBeaconBlock) (*ethpb.ProposeResponse, error) {
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.proposeGenericBeaconBlock")
 	defer span.End()
-	root, err := blk.Block().HashTreeRoot()
+
+	unblinder, err := newUnblinder(blk, vs.BlockBuilder)
 	if err != nil {
-		return nil, fmt.Errorf("could not tree hash block: %v", err)
+		return nil, errors.Wrap(err, "could not create unblinder")
 	}
-
-	if slots.ToEpoch(blk.Block().Slot()) >= params.BeaconConfig().CapellaForkEpoch {
-		blk, err = vs.unblindBuilderBlockCapella(ctx, blk)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		blk, err = vs.unblindBuilderBlock(ctx, blk)
-		if err != nil {
-			return nil, err
-		}
+	blk, err = unblinder.unblindBuilderBlock(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "could not unblind builder block")
 	}
-
-	// Do not block proposal critical path with debug logging or block feed updates.
-	defer func() {
-		log.WithField("blockRoot", fmt.Sprintf("%#x", bytesutil.Trunc(root[:]))).Debugf(
-			"Block proposal received via RPC")
-		vs.BlockNotifier.BlockFeed().Send(&feed.Event{
-			Type: blockfeed.ReceivedBlock,
-			Data: &blockfeed.ReceivedBlockData{SignedBlock: blk},
-		})
-	}()
 
 	// Broadcast the new block to the network.
 	blkPb, err := blk.Proto()
@@ -284,6 +364,11 @@ func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk interfaces.
 	if err := vs.P2P.Broadcast(ctx, blkPb); err != nil {
 		return nil, fmt.Errorf("could not broadcast block: %v", err)
 	}
+	root, err := blk.Block().HashTreeRoot()
+	if err != nil {
+		return nil, fmt.Errorf("could not tree hash block: %v", err)
+	}
+
 	log.WithFields(logrus.Fields{
 		"blockRoot": hex.EncodeToString(root[:]),
 	}).Debug("Broadcasting block")
@@ -291,6 +376,13 @@ func (vs *Server) proposeGenericBeaconBlock(ctx context.Context, blk interfaces.
 	if err := vs.BlockReceiver.ReceiveBlock(ctx, blk, root); err != nil {
 		return nil, fmt.Errorf("could not process beacon block: %v", err)
 	}
+
+	log.WithField("slot", blk.Block().Slot()).Debugf(
+		"Block proposal received via RPC")
+	vs.BlockNotifier.BlockFeed().Send(&feed.Event{
+		Type: blockfeed.ReceivedBlock,
+		Data: &blockfeed.ReceivedBlockData{SignedBlock: blk},
+	})
 
 	return &ethpb.ProposeResponse{
 		BlockRoot: root[:],

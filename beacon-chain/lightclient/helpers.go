@@ -1,7 +1,7 @@
 package lightclient
 
 import (
-	types "github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
+	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
 )
 
 // computeEpochAtSlot implements compute_epoch_at_slot from the spec.

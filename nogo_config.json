@@ -147,11 +147,11 @@
     }
   },
   "ineffassign": {
-    "only_files": {
-      "beacon-chain/.*": "",
-      "shared/.*": "",
-      "slasher/.*": "",
-      "validator/.*": ""
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code",
+      ".*\\.pb.*.go": "Generated code is ok",
+      ".*generated\\.ssz\\.go": "Generated code is ok"
     }
   },
   "properpermissions": {
@@ -181,6 +181,12 @@
       ".*generated\\.ssz\\.go": "Generated code is ok",
       ".*_test\\.go": "Tests are ok (for now)",
       "tools/analyzers/ineffassign/ineffassign\\.go": "3rd party code with a massive switch statement"
+    }
+  },
+  "shift": {
+    "exclude_files": {
+      "external/.*": "Third party code",
+      "rules_go_work-.*": "Third party code"
     }
   }
 }

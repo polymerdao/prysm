@@ -14,10 +14,10 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/golang/protobuf/proto"
 	"github.com/prysmaticlabs/go-bitfield"
-	v1 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
-	eth "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
+	v1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
+	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
 )
 
 func ezDecode(t *testing.T, s string) []byte {
@@ -1154,6 +1154,14 @@ func TestUint256Unmarshal(t *testing.T) {
 	require.NoError(t, err)
 	expected := `{"big_number":"452312848583266388373324160190187140051835877600158453279131187530910662656"}`
 	require.Equal(t, expected, string(m))
+}
+
+func TestUint256Unmarshal_BadData(t *testing.T) {
+	var bigNum Uint256
+
+	assert.ErrorContains(t, "provided Uint256 json string is too short", bigNum.UnmarshalJSON([]byte{'"'}))
+	assert.ErrorContains(t, "provided Uint256 json string is malformed", bigNum.UnmarshalJSON([]byte{'"', '1', '2'}))
+
 }
 
 func TestUint256UnmarshalNegative(t *testing.T) {

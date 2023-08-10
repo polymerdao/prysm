@@ -11,24 +11,27 @@ import (
 	grpcopentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpcprometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/pkg/errors"
-	grpcutil "github.com/prysmaticlabs/prysm/v3/api/grpc"
-	"github.com/prysmaticlabs/prysm/v3/async/event"
-	lruwrpr "github.com/prysmaticlabs/prysm/v3/cache/lru"
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	validatorserviceconfig "github.com/prysmaticlabs/prysm/v3/config/validator/service"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/validator/accounts/wallet"
-	"github.com/prysmaticlabs/prysm/v3/validator/client/iface"
-	validatorClientFactory "github.com/prysmaticlabs/prysm/v3/validator/client/validator-client-factory"
-	"github.com/prysmaticlabs/prysm/v3/validator/db"
-	"github.com/prysmaticlabs/prysm/v3/validator/graffiti"
-	validatorHelpers "github.com/prysmaticlabs/prysm/v3/validator/helpers"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager/local"
-	remoteweb3signer "github.com/prysmaticlabs/prysm/v3/validator/keymanager/remote-web3signer"
+	grpcutil "github.com/prysmaticlabs/prysm/v4/api/grpc"
+	"github.com/prysmaticlabs/prysm/v4/async/event"
+	lruwrpr "github.com/prysmaticlabs/prysm/v4/cache/lru"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	validatorserviceconfig "github.com/prysmaticlabs/prysm/v4/config/validator/service"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/validator/accounts/wallet"
+	beaconChainClientFactory "github.com/prysmaticlabs/prysm/v4/validator/client/beacon-chain-client-factory"
+	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
+	nodeClientFactory "github.com/prysmaticlabs/prysm/v4/validator/client/node-client-factory"
+	slasherClientFactory "github.com/prysmaticlabs/prysm/v4/validator/client/slasher-client-factory"
+	validatorClientFactory "github.com/prysmaticlabs/prysm/v4/validator/client/validator-client-factory"
+	"github.com/prysmaticlabs/prysm/v4/validator/db"
+	"github.com/prysmaticlabs/prysm/v4/validator/graffiti"
+	validatorHelpers "github.com/prysmaticlabs/prysm/v4/validator/helpers"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager/local"
+	remoteweb3signer "github.com/prysmaticlabs/prysm/v4/validator/keymanager/remote-web3signer"
 	"go.opencensus.io/plugin/ocgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -185,12 +188,15 @@ func (v *ValidatorService) Start() {
 		return
 	}
 
+	validatorClient := validatorClientFactory.NewValidatorClient(v.conn)
+	beaconClient := beaconChainClientFactory.NewBeaconChainClient(v.conn)
+
 	valStruct := &validator{
 		db:                             v.db,
-		validatorClient:                validatorClientFactory.NewValidatorClient(v.conn),
-		beaconClient:                   ethpb.NewBeaconChainClient(v.conn.GetGrpcClientConn()),
-		slashingProtectionClient:       ethpb.NewSlasherClient(v.conn.GetGrpcClientConn()),
-		node:                           ethpb.NewNodeClient(v.conn.GetGrpcClientConn()),
+		validatorClient:                validatorClient,
+		beaconClient:                   beaconClient,
+		slashingProtectionClient:       slasherClientFactory.NewSlasherClient(v.conn),
+		node:                           nodeClientFactory.NewNodeClient(v.conn),
 		graffiti:                       v.graffiti,
 		logValidatorBalances:           v.logValidatorBalances,
 		emitAccountMetrics:             v.emitAccountMetrics,
@@ -215,6 +221,7 @@ func (v *ValidatorService) Start() {
 		proposerSettings:               v.proposerSettings,
 		walletInitializedChannel:       make(chan *wallet.Wallet, 1),
 	}
+
 	// To resolve a race condition at startup due to the interface
 	// nature of the abstracted block type. We initialize
 	// the inner type of the feed before hand. So that
@@ -252,17 +259,29 @@ func (v *ValidatorService) InteropKeysConfig() *local.InteropKeymanagerConfig {
 	return v.interopKeysConfig
 }
 
+// Keymanager returns the underlying keymanager in the validator
 func (v *ValidatorService) Keymanager() (keymanager.IKeymanager, error) {
 	return v.validator.Keymanager()
 }
 
+// ProposerSettings returns a deep copy of the underlying proposer settings in the validator
 func (v *ValidatorService) ProposerSettings() *validatorserviceconfig.ProposerSettings {
-	return v.validator.ProposerSettings()
+	settings := v.validator.ProposerSettings()
+	if settings != nil {
+		return settings.Clone()
+	}
+	return nil
 }
 
-func (v *ValidatorService) SetProposerSettings(settings *validatorserviceconfig.ProposerSettings) {
+// SetProposerSettings sets the proposer settings on the validator service as well as the underlying validator
+func (v *ValidatorService) SetProposerSettings(ctx context.Context, settings *validatorserviceconfig.ProposerSettings) error {
+	// validator service proposer settings is only used for pass through from node -> validator service -> validator.
+	// in memory use of proposer settings happens on validator.
 	v.proposerSettings = settings
-	v.validator.SetProposerSettings(settings)
+
+	// passes settings down to be updated in database and saved in memory.
+	// updates to validator porposer settings will be in the validator object and not validator service.
+	return v.validator.SetProposerSettings(ctx, settings)
 }
 
 // ConstructDialOptions constructs a list of grpc dial options

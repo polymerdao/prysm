@@ -1,7 +1,7 @@
 package lightclient
 
 import (
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 )
 
 // update is a convenience wrapper for a LightClientUpdate to feed config parameters into misc utils.

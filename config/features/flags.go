@@ -13,11 +13,6 @@ var (
 		Usage:   "Run Prysm configured for the Prater / Goerli test network",
 		Aliases: []string{"goerli"},
 	}
-	// RopstenTestnet flag for the multiclient Ethereum consensus testnet.
-	RopstenTestnet = &cli.BoolFlag{
-		Name:  "ropsten",
-		Usage: "Run Prysm configured for the Ropsten beacon chain test network",
-	}
 	// SepoliaTestnet flag for the multiclient Ethereum consensus testnet.
 	SepoliaTestnet = &cli.BoolFlag{
 		Name:  "sepolia",
@@ -46,14 +41,36 @@ var (
 		Name:  "disable-grpc-connection-logging",
 		Usage: "Disables displaying logs for newly connected grpc clients",
 	}
+	disableReorgLateBlocks = &cli.BoolFlag{
+		Name:  "disable-reorg-late-blocks",
+		Usage: "Disables reorgs of late blocks",
+	}
 	disablePeerScorer = &cli.BoolFlag{
 		Name:  "disable-peer-scorer",
-		Usage: "Disables experimental P2P peer scorer",
+		Usage: "(Danger): Disables P2P peer scorer. Do NOT use this in production!",
 	}
 	writeWalletPasswordOnWebOnboarding = &cli.BoolFlag{
 		Name: "write-wallet-password-on-web-onboarding",
 		Usage: "(Danger): Writes the wallet password to the wallet directory on completing Prysm web onboarding. " +
 			"We recommend against this flag unless you are an advanced user.",
+	}
+	aggregateFirstInterval = &cli.DurationFlag{
+		Name:   "aggregate-first-interval",
+		Usage:  "(Advanced): Specifies the first interval in which attestations are aggregated in the slot (typically unnaggregated attestations are aggregated in this interval)",
+		Value:  6500 * time.Millisecond,
+		Hidden: true,
+	}
+	aggregateSecondInterval = &cli.DurationFlag{
+		Name:   "aggregate-second-interval",
+		Usage:  "(Advanced): Specifies the second interval in which attestations are aggregated in the slot",
+		Value:  9500 * time.Millisecond,
+		Hidden: true,
+	}
+	aggregateThirdInterval = &cli.DurationFlag{
+		Name:   "aggregate-third-interval",
+		Usage:  "(Advanced): Specifies the third interval in which attestations are aggregated in the slot",
+		Value:  11800 * time.Millisecond,
+		Hidden: true,
 	}
 	dynamicKeyReloadDebounceInterval = &cli.DurationFlag{
 		Name: "dynamic-key-reload-debounce-interval",
@@ -93,31 +110,6 @@ var (
 			" (Warning): Once enabled, this feature migrates your database in to a new schema and " +
 			"there is no going back. At worst, your entire database might get corrupted.",
 	}
-	disablePullTips = &cli.BoolFlag{
-		Name:  "experimental-enable-boundary-checks",
-		Usage: "Experimental enable of boundary checks, useful for debugging, may cause bad votes.",
-	}
-	disableDefensivePull = &cli.BoolFlag{
-		Name:   "disable-back-pull",
-		Usage:  "Experimental disable of past boundary checks, useful for debugging, may cause bad votes.",
-		Hidden: true,
-	}
-	disableVecHTR = &cli.BoolFlag{
-		Name:  "disable-vectorized-htr",
-		Usage: "Disables the new go sha256 library which utilizes optimized routines for merkle trees",
-	}
-	disableForkChoiceDoublyLinkedTree = &cli.BoolFlag{
-		Name:  "disable-forkchoice-doubly-linked-tree",
-		Usage: "Disables the new forkchoice store structure that uses doubly linked trees",
-	}
-	disableGossipBatchAggregation = &cli.BoolFlag{
-		Name:  "disable-gossip-batch-aggregation",
-		Usage: "Disables new methods to further aggregate our gossip batches before verifying them.",
-	}
-	EnableOnlyBlindedBeaconBlocks = &cli.BoolFlag{
-		Name:  "enable-only-blinded-beacon-blocks",
-		Usage: "Enables storing only blinded beacon blocks in the database without full execution layer transactions",
-	}
 	enableStartupOptimistic = &cli.BoolFlag{
 		Name:   "startup-optimistic",
 		Usage:  "Treats every block as optimistically synced at launch. Use with caution",
@@ -128,6 +120,10 @@ var (
 		Name:  "enable-full-ssz-data-logging",
 		Usage: "Enables displaying logs for full ssz data on rejected gossip messages",
 	}
+	SaveFullExecutionPayloads = &cli.BoolFlag{
+		Name:  "save-full-execution-payloads",
+		Usage: "Saves beacon blocks with full execution payloads instead of execution payload headers in the database",
+	}
 	EnableBeaconRESTApi = &cli.BoolFlag{
 		Name:  "enable-beacon-rest-api",
 		Usage: "Experimental enable of the beacon REST API when querying a beacon node",
@@ -136,17 +132,46 @@ var (
 		Name:  "enable-verbose-sig-verification",
 		Usage: "Enables identifying invalid signatures if batch verification fails when processing block",
 	}
+	enableOptionalEngineMethods = &cli.BoolFlag{
+		Name:  "enable-optional-engine-methods",
+		Usage: "Enables the optional engine methods",
+	}
+	prepareAllPayloads = &cli.BoolFlag{
+		Name:  "prepare-all-payloads",
+		Usage: "Informs the engine to prepare all local payloads. Useful for relayers and builders",
+	}
+	disableBuildBlockParallel = &cli.BoolFlag{
+		Name:  "disable-build-block-parallel",
+		Usage: "Disables building a beacon block in parallel for consensus and execution",
+	}
+	disableResourceManager = &cli.BoolFlag{
+		Name:  "disable-resource-manager",
+		Usage: "Disables running the libp2p resource manager",
+	}
+
+	// DisableRegistrationCache a flag for disabling the validator registration cache and use db instead.
+	DisableRegistrationCache = &cli.BoolFlag{
+		Name:  "diable-registration-cache",
+		Usage: "A temporary flag for disabling the validator registration cache instead of using the db. note: registrations do not clear on restart while using the db",
+	}
+
+	aggregateParallel = &cli.BoolFlag{
+		Name:  "aggregate-parallel",
+		Usage: "Enables parallel aggregation of attestations",
+	}
 )
 
 // devModeFlags holds list of flags that are set when development mode is on.
-var devModeFlags = []cli.Flag{}
+var devModeFlags = []cli.Flag{
+	enableVerboseSigVerification,
+	enableOptionalEngineMethods,
+}
 
 // ValidatorFlags contains a list of all the feature flags that apply to the validator client.
 var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	writeWalletPasswordOnWebOnboarding,
 	enableExternalSlasherProtectionFlag,
 	PraterTestnet,
-	RopstenTestnet,
 	SepoliaTestnet,
 	Mainnet,
 	dynamicKeyReloadDebounceInterval,
@@ -167,7 +192,6 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	writeSSZStateTransitionsFlag,
 	disableGRPCConnectionLogging,
 	PraterTestnet,
-	RopstenTestnet,
 	SepoliaTestnet,
 	Mainnet,
 	disablePeerScorer,
@@ -175,15 +199,20 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	enableSlasherFlag,
 	enableHistoricalSpaceRepresentation,
 	disableStakinContractCheck,
-	disablePullTips,
-	disableVecHTR,
-	disableForkChoiceDoublyLinkedTree,
-	disableGossipBatchAggregation,
-	EnableOnlyBlindedBeaconBlocks,
+	disableReorgLateBlocks,
+	SaveFullExecutionPayloads,
 	enableStartupOptimistic,
-	disableDefensivePull,
 	enableFullSSZDataLogging,
 	enableVerboseSigVerification,
+	enableOptionalEngineMethods,
+	prepareAllPayloads,
+	disableBuildBlockParallel,
+	aggregateFirstInterval,
+	aggregateSecondInterval,
+	aggregateThirdInterval,
+	disableResourceManager,
+	DisableRegistrationCache,
+	aggregateParallel,
 }...)...)
 
 // E2EBeaconChainFlags contains a list of the beacon chain feature flags to be tested in E2E.
@@ -195,6 +224,5 @@ var E2EBeaconChainFlags = []string{
 var NetworkFlags = []cli.Flag{
 	Mainnet,
 	PraterTestnet,
-	RopstenTestnet,
 	SepoliaTestnet,
 }

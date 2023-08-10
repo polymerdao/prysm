@@ -5,14 +5,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	statenative "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	"github.com/prysmaticlabs/prysm/v3/testing/util"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	statenative "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/testing/util"
 )
 
 func TestInitializeFromProto_Phase0(t *testing.T) {
@@ -348,13 +348,13 @@ func TestBeaconState_HashTreeRoot(t *testing.T) {
 			assert.NoError(t, err)
 			root, err := testState.HashTreeRoot(context.Background())
 			if err == nil && tt.error != "" {
-				t.Errorf("Expected error, expected %v, recevied %v", tt.error, err)
+				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
 			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
-				t.Errorf("Expected error, expected %v, recevied %v", tt.error, err)
+				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
 			assert.DeepNotEqual(t, []byte{}, root[:], "Received empty hash tree root")
 			assert.DeepEqual(t, genericHTR[:], root[:], "Expected hash tree root to match generic")
@@ -435,13 +435,13 @@ func TestBeaconState_HashTreeRoot_FieldTrie(t *testing.T) {
 			assert.NoError(t, err)
 			root, err := testState.HashTreeRoot(context.Background())
 			if err == nil && tt.error != "" {
-				t.Errorf("Expected error, expected %v, recevied %v", tt.error, err)
+				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
 			pbState, err := statenative.ProtobufBeaconStatePhase0(testState.ToProtoUnsafe())
 			require.NoError(t, err)
 			genericHTR, err := pbState.HashTreeRoot()
 			if err == nil && tt.error != "" {
-				t.Errorf("Expected error, expected %v, recevied %v", tt.error, err)
+				t.Errorf("Expected error, expected %v, received %v", tt.error, err)
 			}
 			assert.DeepNotEqual(t, []byte{}, root[:], "Received empty hash tree root")
 			assert.DeepEqual(t, genericHTR[:], root[:], "Expected hash tree root to match generic")

@@ -5,13 +5,13 @@ import (
 	"context"
 	"time"
 
-	fieldparams "github.com/prysmaticlabs/prysm/v3/config/fieldparams"
-	validatorserviceconfig "github.com/prysmaticlabs/prysm/v3/config/validator/service"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
-	"github.com/prysmaticlabs/prysm/v3/validator/client/iface"
-	"github.com/prysmaticlabs/prysm/v3/validator/keymanager"
+	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
+	validatorserviceconfig "github.com/prysmaticlabs/prysm/v4/config/validator/service"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
+	"github.com/prysmaticlabs/prysm/v4/validator/client/iface"
+	"github.com/prysmaticlabs/prysm/v4/validator/keymanager"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -53,13 +53,9 @@ type FakeValidator struct {
 	PubkeyToIndexMap                  map[[fieldparams.BLSPubkeyLength]byte]uint64
 	PubkeysToStatusesMap              map[[fieldparams.BLSPubkeyLength]byte]ethpb.ValidatorStatus
 	proposerSettings                  *validatorserviceconfig.ProposerSettings
+	ProposerSettingWait               time.Duration
 	Km                                keymanager.IKeymanager
 }
-
-type ctxKey string
-
-// AllValidatorsAreExitedCtxKey represents the metadata context key used for exits.
-var AllValidatorsAreExitedCtxKey = ctxKey("exited")
 
 // Done for mocking.
 func (fv *FakeValidator) Done() {
@@ -211,14 +207,6 @@ func (fv *FakeValidator) PubkeysToStatuses(_ context.Context) map[[fieldparams.B
 	return fv.PubkeysToStatusesMap
 }
 
-// AllValidatorsAreExited for mocking
-func (_ *FakeValidator) AllValidatorsAreExited(ctx context.Context) (bool, error) {
-	if ctx.Value(AllValidatorsAreExitedCtxKey) == nil {
-		return false, nil
-	}
-	return ctx.Value(AllValidatorsAreExitedCtxKey).(bool), nil
-}
-
 // Keymanager for mocking
 func (fv *FakeValidator) Keymanager() (keymanager.IKeymanager, error) {
 	return fv.Km, nil
@@ -258,10 +246,21 @@ func (*FakeValidator) HasProposerSettings() bool {
 }
 
 // PushProposerSettings for mocking
-func (fv *FakeValidator) PushProposerSettings(_ context.Context, _ keymanager.IKeymanager) error {
+func (fv *FakeValidator) PushProposerSettings(ctx context.Context, km keymanager.IKeymanager, slot primitives.Slot, deadline time.Time) error {
+	nctx, cancel := context.WithDeadline(ctx, deadline)
+	ctx = nctx
+	defer cancel()
+	time.Sleep(fv.ProposerSettingWait)
+	if ctx.Err() == context.DeadlineExceeded {
+		log.Error("deadline exceeded")
+		// can't return error or it will trigger a log.fatal
+		return nil
+	}
+
 	if fv.ProposerSettingsErr != nil {
 		return fv.ProposerSettingsErr
 	}
+
 	log.Infoln("Mock updated proposer settings")
 	return nil
 }
@@ -282,6 +281,7 @@ func (f *FakeValidator) ProposerSettings() *validatorserviceconfig.ProposerSetti
 }
 
 // SetProposerSettings for mocking
-func (f *FakeValidator) SetProposerSettings(settings *validatorserviceconfig.ProposerSettings) {
+func (f *FakeValidator) SetProposerSettings(_ context.Context, settings *validatorserviceconfig.ProposerSettings) error {
 	f.proposerSettings = settings
+	return nil
 }

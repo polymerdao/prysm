@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/altair"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	state_native "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	prysmTime "github.com/prysmaticlabs/prysm/v3/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	prysmTime "github.com/prysmaticlabs/prysm/v4/time"
 )
 
 func TestSyncCommitteeIndices_CanGet(t *testing.T) {
@@ -311,7 +311,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 				syncMessageSlot: 16,
 				genesisTime:     prysmTime.Now().Add(-(15 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second)),
 			},
-			wantedErr: "(slot 16) not within allowable range of",
+			wantedErr: "(message slot 16) not within allowable range of",
 		},
 		{
 			name: "sync_message.slot == current_slot+CLOCK_DISPARITY",
@@ -327,7 +327,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 				syncMessageSlot: 100,
 				genesisTime:     prysmTime.Now().Add(-(100 * time.Duration(params.BeaconConfig().SecondsPerSlot) * time.Second) + params.BeaconNetworkConfig().MaximumGossipClockDisparity + 1000*time.Millisecond),
 			},
-			wantedErr: "(slot 100) not within allowable range of",
+			wantedErr: "(message slot 100) not within allowable range of",
 		},
 		{
 			name: "sync_message.slot == current_slot-CLOCK_DISPARITY",
@@ -343,7 +343,7 @@ func Test_ValidateSyncMessageTime(t *testing.T) {
 				syncMessageSlot: 101,
 				genesisTime:     prysmTime.Now().Add(-(100*time.Duration(params.BeaconConfig().SecondsPerSlot)*time.Second + params.BeaconNetworkConfig().MaximumGossipClockDisparity)),
 			},
-			wantedErr: "(slot 101) not within allowable range of",
+			wantedErr: "(message slot 101) not within allowable range of",
 		},
 		{
 			name: "sync_message.slot is well beyond current slot",

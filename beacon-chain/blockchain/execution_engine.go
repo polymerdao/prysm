@@ -5,22 +5,23 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/blocks"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/helpers"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/db/kv"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/execution"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/state"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	consensusblocks "github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	payloadattribute "github.com/prysmaticlabs/prysm/v3/consensus-types/payload-attribute"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	enginev1 "github.com/prysmaticlabs/prysm/v3/proto/engine/v1"
-	"github.com/prysmaticlabs/prysm/v3/runtime/version"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/kv"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/execution"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	consensusblocks "github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	payloadattribute "github.com/prysmaticlabs/prysm/v4/consensus-types/payload-attribute"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"github.com/sirupsen/logrus"
 	"go.opencensus.io/trace"
 )
@@ -60,8 +61,8 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *notifyForkcho
 		log.WithError(err).Error("Could not get execution payload for head block")
 		return nil, nil
 	}
-	finalizedHash := s.ForkChoicer().FinalizedPayloadBlockHash()
-	justifiedHash := s.ForkChoicer().JustifiedPayloadBlockHash()
+	finalizedHash := s.cfg.ForkChoiceStore.FinalizedPayloadBlockHash()
+	justifiedHash := s.cfg.ForkChoiceStore.UnrealizedJustifiedPayloadBlockHash()
 	fcs := &enginev1.ForkchoiceState{
 		HeadBlockHash:      headPayload.BlockHash(),
 		SafeBlockHash:      justifiedHash[:],
@@ -69,7 +70,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *notifyForkcho
 	}
 
 	nextSlot := s.CurrentSlot() + 1 // Cache payload ID for next slot proposer.
-	hasAttr, attr, proposerId := s.getPayloadAttribute(ctx, arg.headState, nextSlot)
+	hasAttr, attr, proposerId := s.getPayloadAttribute(ctx, arg.headState, nextSlot, arg.headRoot[:])
 
 	payloadID, lastValidHash, err := s.cfg.ExecutionEngineCaller.ForkchoiceUpdated(ctx, fcs, attr)
 	if err != nil {
@@ -88,7 +89,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *notifyForkcho
 			if len(lastValidHash) == 0 {
 				lastValidHash = defaultLatestValidHash
 			}
-			invalidRoots, err := s.ForkChoicer().SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(lastValidHash))
+			invalidRoots, err := s.cfg.ForkChoiceStore.SetOptimisticToInvalid(ctx, headRoot, headBlk.ParentRoot(), bytesutil.ToBytes32(lastValidHash))
 			if err != nil {
 				log.WithError(err).Error("Could not set head root to invalid")
 				return nil, nil
@@ -153,7 +154,7 @@ func (s *Service) notifyForkchoiceUpdate(ctx context.Context, arg *notifyForkcho
 		var pId [8]byte
 		copy(pId[:], payloadID[:])
 		s.cfg.ProposerSlotIndexCache.SetProposerAndPayloadIDs(nextSlot, proposerId, pId, arg.headRoot)
-	} else if hasAttr && payloadID == nil {
+	} else if hasAttr && payloadID == nil && !features.Get().PrepareAllPayloads {
 		log.WithFields(logrus.Fields{
 			"blockHash": fmt.Sprintf("%#x", headPayload.BlockHash()),
 			"slot":      headBlk.Slot(),
@@ -181,21 +182,24 @@ func (s *Service) getPayloadHash(ctx context.Context, root []byte) ([32]byte, er
 
 // notifyNewPayload signals execution engine on a new payload.
 // It returns true if the EL has returned VALID for the block
-func (s *Service) notifyNewPayload(ctx context.Context, postStateVersion int,
-	postStateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
+func (s *Service) notifyNewPayload(ctx context.Context, preStateVersion int,
+	preStateHeader interfaces.ExecutionData, blk interfaces.ReadOnlySignedBeaconBlock) (bool, error) {
 	ctx, span := trace.StartSpan(ctx, "blockChain.notifyNewPayload")
 	defer span.End()
 
 	// Execution payload is only supported in Bellatrix and beyond. Pre
 	// merge blocks are never optimistic
-	if blocks.IsPreBellatrixVersion(postStateVersion) {
+	if blk == nil {
+		return false, errors.New("signed beacon block can't be nil")
+	}
+	if preStateVersion < version.Bellatrix {
 		return true, nil
 	}
 	if err := consensusblocks.BeaconBlockIsNil(blk); err != nil {
 		return false, err
 	}
 	body := blk.Block().Body()
-	enabled, err := blocks.IsExecutionEnabledUsingHeader(postStateHeader, body)
+	enabled, err := blocks.IsExecutionEnabledUsingHeader(preStateHeader, body)
 	if err != nil {
 		return false, errors.Wrap(invalidBlock{error: err}, "could not determine if execution is enabled")
 	}
@@ -219,51 +223,56 @@ func (s *Service) notifyNewPayload(ctx context.Context, postStateVersion int,
 		}).Info("Called new payload with optimistic block")
 		return false, nil
 	case execution.ErrInvalidPayloadStatus:
-		newPayloadInvalidNodeCount.Inc()
-		root, err := blk.Block().HashTreeRoot()
-		if err != nil {
-			return false, err
-		}
-		invalidRoots, err := s.ForkChoicer().SetOptimisticToInvalid(ctx, root, blk.Block().ParentRoot(), bytesutil.ToBytes32(lastValidHash))
-		if err != nil {
-			return false, err
-		}
-		if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
-			return false, err
-		}
-		log.WithFields(logrus.Fields{
-			"slot":                 blk.Block().Slot(),
-			"blockRoot":            fmt.Sprintf("%#x", root),
-			"invalidChildrenCount": len(invalidRoots),
-		}).Warn("Pruned invalid blocks")
+		lvh := bytesutil.ToBytes32(lastValidHash)
 		return false, invalidBlock{
-			invalidAncestorRoots: invalidRoots,
-			error:                ErrInvalidPayload,
+			error:         ErrInvalidPayload,
+			lastValidHash: lvh,
 		}
-	case execution.ErrInvalidBlockHashPayloadStatus:
-		newPayloadInvalidNodeCount.Inc()
-		return false, ErrInvalidBlockHashPayloadStatus
 	default:
 		return false, errors.WithMessage(ErrUndefinedExecutionEngineError, err.Error())
 	}
 }
 
+// reportInvalidBlock deals with the event that an invalid block was detected by the execution layer
+func (s *Service) pruneInvalidBlock(ctx context.Context, root, parentRoot, lvh [32]byte) error {
+	newPayloadInvalidNodeCount.Inc()
+	invalidRoots, err := s.SetOptimisticToInvalid(ctx, root, parentRoot, lvh)
+	if err != nil {
+		return err
+	}
+	if err := s.removeInvalidBlockAndState(ctx, invalidRoots); err != nil {
+		return err
+	}
+	log.WithFields(logrus.Fields{
+		"blockRoot":            fmt.Sprintf("%#x", root),
+		"invalidChildrenCount": len(invalidRoots),
+	}).Warn("Pruned invalid blocks")
+	return invalidBlock{
+		invalidAncestorRoots: invalidRoots,
+		error:                ErrInvalidPayload,
+		lastValidHash:        lvh,
+	}
+}
+
 // getPayloadAttributes returns the payload attributes for the given state and slot.
 // The attribute is required to initiate a payload build process in the context of an `engine_forkchoiceUpdated` call.
-func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot) (bool, payloadattribute.Attributer, primitives.ValidatorIndex) {
+func (s *Service) getPayloadAttribute(ctx context.Context, st state.BeaconState, slot primitives.Slot, headRoot []byte) (bool, payloadattribute.Attributer, primitives.ValidatorIndex) {
 	emptyAttri := payloadattribute.EmptyWithVersion(st.Version())
 	// Root is `[32]byte{}` since we are retrieving proposer ID of a given slot. During insertion at assignment the root was not known.
 	proposerID, _, ok := s.cfg.ProposerSlotIndexCache.GetProposerPayloadIDs(slot, [32]byte{} /* root */)
-	if !ok { // There's no need to build attribute if there is no proposer for slot.
+	if !ok && !features.Get().PrepareAllPayloads { // There's no need to build attribute if there is no proposer for slot.
 		return false, emptyAttri, 0
 	}
 
 	// Get previous randao.
 	st = st.Copy()
-	st, err := transition.ProcessSlotsIfPossible(ctx, st, slot)
-	if err != nil {
-		log.WithError(err).Error("Could not process slots to get payload attribute")
-		return false, emptyAttri, 0
+	if slot > st.Slot() {
+		var err error
+		st, err = transition.ProcessSlotsUsingNextSlotCache(ctx, st, headRoot, slot)
+		if err != nil {
+			log.WithError(err).Error("Could not process slots to get payload attribute")
+			return false, emptyAttri, 0
+		}
 	}
 	prevRando, err := helpers.RandaoMix(st, time.CurrentEpoch(st))
 	if err != nil {

@@ -9,33 +9,33 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prysmaticlabs/go-bitfield"
-	grpcutil "github.com/prysmaticlabs/prysm/v3/api/grpc"
-	blockchainmock "github.com/prysmaticlabs/prysm/v3/beacon-chain/blockchain/testing"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/signing"
-	prysmtime "github.com/prysmaticlabs/prysm/v3/beacon-chain/core/time"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/core/transition"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/attestations"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/blstoexec"
-	blstoexecmock "github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/blstoexec/mock"
-	slashingsmock "github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/slashings/mock"
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/voluntaryexits/mock"
-	p2pMock "github.com/prysmaticlabs/prysm/v3/beacon-chain/p2p/testing"
-	state_native "github.com/prysmaticlabs/prysm/v3/beacon-chain/state/state-native"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls"
-	"github.com/prysmaticlabs/prysm/v3/crypto/bls/common"
-	"github.com/prysmaticlabs/prysm/v3/crypto/hash"
-	"github.com/prysmaticlabs/prysm/v3/encoding/bytesutil"
-	"github.com/prysmaticlabs/prysm/v3/encoding/ssz"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
-	"github.com/prysmaticlabs/prysm/v3/proto/migration"
-	ethpbv1alpha1 "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
-	"github.com/prysmaticlabs/prysm/v3/testing/assert"
-	"github.com/prysmaticlabs/prysm/v3/testing/require"
-	"github.com/prysmaticlabs/prysm/v3/testing/util"
-	"github.com/prysmaticlabs/prysm/v3/time/slots"
+	grpcutil "github.com/prysmaticlabs/prysm/v4/api/grpc"
+	blockchainmock "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
+	prysmtime "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/time"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/attestations"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/blstoexec"
+	blstoexecmock "github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/blstoexec/mock"
+	slashingsmock "github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/slashings/mock"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/voluntaryexits/mock"
+	p2pMock "github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/testing"
+	state_native "github.com/prysmaticlabs/prysm/v4/beacon-chain/state/state-native"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls"
+	"github.com/prysmaticlabs/prysm/v4/crypto/bls/common"
+	"github.com/prysmaticlabs/prysm/v4/crypto/hash"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/encoding/ssz"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
+	"github.com/prysmaticlabs/prysm/v4/proto/migration"
+	ethpbv1alpha1 "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/testing/assert"
+	"github.com/prysmaticlabs/prysm/v4/testing/require"
+	"github.com/prysmaticlabs/prysm/v4/testing/util"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -452,6 +452,9 @@ func TestSubmitAttesterSlashing_Ok(t *testing.T) {
 	require.Equal(t, 1, len(pendingSlashings))
 	assert.DeepEqual(t, migration.V1AttSlashingToV1Alpha1(slashing), pendingSlashings[0])
 	assert.Equal(t, true, broadcaster.BroadcastCalled)
+	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashing)
+	assert.Equal(t, true, ok)
 }
 
 func TestSubmitAttesterSlashing_AcrossFork(t *testing.T) {
@@ -526,6 +529,9 @@ func TestSubmitAttesterSlashing_AcrossFork(t *testing.T) {
 	require.Equal(t, 1, len(pendingSlashings))
 	assert.DeepEqual(t, migration.V1AttSlashingToV1Alpha1(slashing), pendingSlashings[0])
 	assert.Equal(t, true, broadcaster.BroadcastCalled)
+	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.AttesterSlashing)
+	assert.Equal(t, true, ok)
 }
 
 func TestSubmitAttesterSlashing_InvalidSlashing(t *testing.T) {
@@ -633,6 +639,9 @@ func TestSubmitProposerSlashing_Ok(t *testing.T) {
 	require.Equal(t, 1, len(pendingSlashings))
 	assert.DeepEqual(t, migration.V1ProposerSlashingToV1Alpha1(slashing), pendingSlashings[0])
 	assert.Equal(t, true, broadcaster.BroadcastCalled)
+	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.ProposerSlashing)
+	assert.Equal(t, true, ok)
 }
 
 func TestSubmitProposerSlashing_AcrossFork(t *testing.T) {
@@ -695,6 +704,13 @@ func TestSubmitProposerSlashing_AcrossFork(t *testing.T) {
 
 	_, err = s.SubmitProposerSlashing(ctx, slashing)
 	require.NoError(t, err)
+	pendingSlashings := s.SlashingsPool.PendingProposerSlashings(ctx, bs, true)
+	require.Equal(t, 1, len(pendingSlashings))
+	assert.DeepEqual(t, migration.V1ProposerSlashingToV1Alpha1(slashing), pendingSlashings[0])
+	assert.Equal(t, true, broadcaster.BroadcastCalled)
+	require.Equal(t, 1, len(broadcaster.BroadcastMessages))
+	_, ok := broadcaster.BroadcastMessages[0].(*ethpbv1alpha1.ProposerSlashing)
+	assert.Equal(t, true, ok)
 }
 
 func TestSubmitProposerSlashing_InvalidSlashing(t *testing.T) {
@@ -770,7 +786,8 @@ func TestSubmitVoluntaryExit_Ok(t *testing.T) {
 
 	_, err = s.SubmitVoluntaryExit(ctx, exit)
 	require.NoError(t, err)
-	pendingExits := s.VoluntaryExitsPool.PendingExits(bs, bs.Slot(), true)
+	pendingExits, err := s.VoluntaryExitsPool.PendingExits()
+	require.NoError(t, err)
 	require.Equal(t, 1, len(pendingExits))
 	assert.DeepEqual(t, migration.V1ExitToV1Alpha1(exit), pendingExits[0])
 	assert.Equal(t, true, broadcaster.BroadcastCalled)
@@ -990,6 +1007,8 @@ func TestServer_SubmitAttestations_Ok(t *testing.T) {
 	for _, r := range [][32]byte{actualAtt1, actualAtt2} {
 		assert.Equal(t, true, reflect.DeepEqual(expectedAtt1, r) || reflect.DeepEqual(expectedAtt2, r))
 	}
+
+	require.Equal(t, 2, s.AttestationsPool.UnaggregatedAttestationCount())
 }
 
 func TestServer_SubmitAttestations_ValidAttestationSubmitted(t *testing.T) {
@@ -1090,6 +1109,8 @@ func TestServer_SubmitAttestations_ValidAttestationSubmitted(t *testing.T) {
 	broadcastRoot, err := broadcaster.BroadcastAttestations[0].HashTreeRoot()
 	require.NoError(t, err)
 	require.DeepEqual(t, expectedAtt, broadcastRoot)
+
+	require.Equal(t, 1, s.AttestationsPool.UnaggregatedAttestationCount())
 }
 
 func TestServer_SubmitAttestations_InvalidAttestationGRPCHeader(t *testing.T) {
@@ -1162,7 +1183,7 @@ func TestServer_SubmitAttestations_InvalidAttestationGRPCHeader(t *testing.T) {
 	require.Equal(t, true, ok, "could not retrieve custom error metadata value")
 	assert.DeepEqual(
 		t,
-		[]string{"{\"failures\":[{\"index\":0,\"message\":\"Incorrect attestation signature: signature must be 96 bytes\"}]}"},
+		[]string{"{\"failures\":[{\"index\":0,\"message\":\"Incorrect attestation signature: could not create signature from byte slice: signature must be 96 bytes\"}]}"},
 		v,
 	)
 }

@@ -2,18 +2,25 @@ package beacon
 
 import (
 	"context"
+	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/prysmaticlabs/prysm/v3/config/params"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/interfaces"
-	"github.com/prysmaticlabs/prysm/v3/encoding/ssz/detect"
-	"github.com/prysmaticlabs/prysm/v3/network/forks"
-	ethpbv1 "github.com/prysmaticlabs/prysm/v3/proto/eth/v1"
-	ethpbv2 "github.com/prysmaticlabs/prysm/v3/proto/eth/v2"
-	"github.com/prysmaticlabs/prysm/v3/proto/migration"
-	eth "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/api"
+	rpchelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/prysm/v1alpha1/validator"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	consensus_types "github.com/prysmaticlabs/prysm/v4/consensus-types"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/encoding/bytesutil"
+	"github.com/prysmaticlabs/prysm/v4/encoding/ssz/detect"
+	"github.com/prysmaticlabs/prysm/v4/network/forks"
+	ethpbv1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
+	"github.com/prysmaticlabs/prysm/v4/proto/migration"
+	eth "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/runtime/version"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -25,7 +32,7 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 	ctx, span := trace.StartSpan(ctx, "beacon.GetBlindedBlock")
 	defer span.End()
 
-	blk, err := bs.blockFromBlockID(ctx, req.BlockId)
+	blk, err := bs.Blocker.Block(ctx, req.BlockId)
 	err = handleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
@@ -34,14 +41,16 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 	if err != nil {
 		return nil, errors.Wrapf(err, "could not get block root")
 	}
-
+	if err := grpc.SetHeader(ctx, metadata.Pairs(api.VersionHeader, version.String(blk.Version()))); err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not set "+api.VersionHeader+" header: %v", err)
+	}
 	result, err := getBlindedBlockPhase0(blk)
 	if result != nil {
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
 	}
 	result, err = getBlindedBlockAltair(blk)
@@ -49,8 +58,8 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
 	}
 	result, err = bs.getBlindedBlockBellatrix(ctx, blk)
@@ -58,8 +67,8 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
 	}
 	result, err = bs.getBlindedBlockCapella(ctx, blk)
@@ -67,8 +76,8 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
 	}
 
@@ -80,7 +89,7 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 	ctx, span := trace.StartSpan(ctx, "beacon.GetBlindedBlockSSZ")
 	defer span.End()
 
-	blk, err := bs.blockFromBlockID(ctx, req.BlockId)
+	blk, err := bs.Blocker.Block(ctx, req.BlockId)
 	err = handleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
@@ -95,8 +104,8 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get signed beacon block: %v", err)
 	}
 	result, err = getSSZBlockAltair(blk)
@@ -104,8 +113,8 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get signed beacon block: %v", err)
 	}
 	result, err = bs.getBlindedSSZBlockBellatrix(ctx, blk)
@@ -113,8 +122,8 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get signed beacon block: %v", err)
 	}
 	result, err = bs.getBlindedSSZBlockCapella(ctx, blk)
@@ -122,8 +131,8 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 		result.Finalized = bs.FinalizationFetcher.IsFinalized(ctx, blkRoot)
 		return result, nil
 	}
-	// ErrUnsupportedGetter means that we have another block type
-	if !errors.Is(err, blocks.ErrUnsupportedGetter) {
+	// ErrUnsupportedField means that we have another block type
+	if !errors.Is(err, consensus_types.ErrUnsupportedField) {
 		return nil, status.Errorf(codes.Internal, "Could not get signed beacon block: %v", err)
 	}
 
@@ -141,6 +150,11 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 func (bs *Server) SubmitBlindedBlock(ctx context.Context, req *ethpbv2.SignedBlindedBeaconBlockContainer) (*emptypb.Empty, error) {
 	ctx, span := trace.StartSpan(ctx, "beacon.SubmitBlindedBlock")
 	defer span.End()
+
+	if err := rpchelpers.ValidateSyncGRPC(ctx, bs.SyncChecker, bs.HeadFetcher, bs.TimeFetcher, bs.OptimisticModeFetcher); err != nil {
+		// We simply return the error because it's already a gRPC error.
+		return nil, err
+	}
 
 	switch blkContainer := req.Message.(type) {
 	case *ethpbv2.SignedBlindedBeaconBlockContainer_CapellaBlock:
@@ -180,13 +194,18 @@ func (bs *Server) SubmitBlindedBlockSSZ(ctx context.Context, req *ethpbv2.SSZCon
 	ctx, span := trace.StartSpan(ctx, "beacon.SubmitBlindedBlockSSZ")
 	defer span.End()
 
+	if err := rpchelpers.ValidateSyncGRPC(ctx, bs.SyncChecker, bs.HeadFetcher, bs.TimeFetcher, bs.OptimisticModeFetcher); err != nil {
+		// We simply return the error because it's already a gRPC error.
+		return nil, err
+	}
+
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not read"+versionHeader+" header")
+		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not read"+api.VersionHeader+" header")
 	}
-	ver := md.Get(versionHeader)
+	ver := md.Get(api.VersionHeader)
 	if len(ver) == 0 {
-		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not read"+versionHeader+" header")
+		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not read"+api.VersionHeader+" header")
 	}
 	schedule := forks.NewOrderedSchedule(params.BeaconConfig())
 	forkVer, err := schedule.VersionForName(ver[0])
@@ -202,31 +221,84 @@ func (bs *Server) SubmitBlindedBlockSSZ(ctx context.Context, req *ethpbv2.SSZCon
 		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not unmarshal request data into block: %v", err)
 	}
 
-	if block.IsBlinded() {
+	switch forkVer {
+	case bytesutil.ToBytes4(params.BeaconConfig().CapellaForkVersion):
+		if !block.IsBlinded() {
+			return nil, status.Error(codes.InvalidArgument, "Submitted block is not blinded")
+		}
+		b, err := block.PbBlindedCapellaBlock()
+		if err != nil {
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not get proto block: %v", err)
+		}
+		_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
+				BlindedCapella: b,
+			},
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+				return &emptypb.Empty{}, status.Error(codes.InvalidArgument, err.Error())
+			}
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not propose block: %v", err)
+		}
+		return &emptypb.Empty{}, nil
+	case bytesutil.ToBytes4(params.BeaconConfig().BellatrixForkVersion):
+		if !block.IsBlinded() {
+			return nil, status.Error(codes.InvalidArgument, "Submitted block is not blinded")
+		}
 		b, err := block.PbBlindedBellatrixBlock()
 		if err != nil {
-			b, err := block.PbBlindedCapellaBlock()
-			if err != nil {
-				return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
-			}
-			bb, err := migration.V1Alpha1BeaconBlockBlindedCapellaToV2Blinded(b.Block)
-			if err != nil {
-				return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not migrate block: %v", err)
-			}
-			return &emptypb.Empty{}, bs.submitBlindedCapellaBlock(ctx, bb, b.Signature)
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not get proto block: %v", err)
 		}
-		bb, err := migration.V1Alpha1BeaconBlockBlindedBellatrixToV2Blinded(b.Block)
+		_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
+				BlindedBellatrix: b,
+			},
+		})
 		if err != nil {
-			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not migrate block: %v", err)
+			if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+				return &emptypb.Empty{}, status.Error(codes.InvalidArgument, err.Error())
+			}
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not propose block: %v", err)
 		}
-		return &emptypb.Empty{}, bs.submitBlindedBellatrixBlock(ctx, bb, b.Signature)
+		return &emptypb.Empty{}, nil
+	case bytesutil.ToBytes4(params.BeaconConfig().AltairForkVersion):
+		b, err := block.PbAltairBlock()
+		if err != nil {
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not get proto block: %v", err)
+		}
+		_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Altair{
+				Altair: b,
+			},
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+				return &emptypb.Empty{}, status.Error(codes.InvalidArgument, err.Error())
+			}
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not propose block: %v", err)
+		}
+		return &emptypb.Empty{}, nil
+	case bytesutil.ToBytes4(params.BeaconConfig().GenesisForkVersion):
+		b, err := block.PbPhase0Block()
+		if err != nil {
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not get proto block: %v", err)
+		}
+		_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
+			Block: &eth.GenericSignedBeaconBlock_Phase0{
+				Phase0: b,
+			},
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+				return &emptypb.Empty{}, status.Error(codes.InvalidArgument, err.Error())
+			}
+			return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not propose block: %v", err)
+		}
+		return &emptypb.Empty{}, nil
+	default:
+		return &emptypb.Empty{}, status.Errorf(codes.InvalidArgument, "Unsupported fork %s", string(forkVer[:]))
 	}
-
-	root, err := block.Block().HashTreeRoot()
-	if err != nil {
-		return &emptypb.Empty{}, status.Errorf(codes.Internal, "Could not compute block's hash tree root: %v", err)
-	}
-	return &emptypb.Empty{}, bs.submitBlock(ctx, root, block)
 }
 
 func getBlindedBlockPhase0(blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.BlindedBlockResponse, error) {
@@ -277,8 +349,8 @@ func getBlindedBlockAltair(blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.B
 func (bs *Server) getBlindedBlockBellatrix(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.BlindedBlockResponse, error) {
 	bellatrixBlk, err := blk.PbBellatrixBlock()
 	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, blocks.ErrUnsupportedGetter) {
+		// ErrUnsupportedField means that we have another block type
+		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			if blindedBellatrixBlk, err := blk.PbBlindedBellatrixBlock(); err == nil {
 				if blindedBellatrixBlk == nil {
 					return nil, errNilBlock
@@ -347,8 +419,8 @@ func (bs *Server) getBlindedBlockBellatrix(ctx context.Context, blk interfaces.R
 func (bs *Server) getBlindedBlockCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.BlindedBlockResponse, error) {
 	capellaBlk, err := blk.PbCapellaBlock()
 	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, blocks.ErrUnsupportedGetter) {
+		// ErrUnsupportedField means that we have another block type
+		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			if blindedCapellaBlk, err := blk.PbBlindedCapellaBlock(); err == nil {
 				if blindedCapellaBlk == nil {
 					return nil, errNilBlock
@@ -417,8 +489,8 @@ func (bs *Server) getBlindedBlockCapella(ctx context.Context, blk interfaces.Rea
 func (bs *Server) getBlindedSSZBlockBellatrix(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.SSZContainer, error) {
 	bellatrixBlk, err := blk.PbBellatrixBlock()
 	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, blocks.ErrUnsupportedGetter) {
+		// ErrUnsupportedField means that we have another block type
+		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			if blindedBellatrixBlk, err := blk.PbBlindedBellatrixBlock(); err == nil {
 				if blindedBellatrixBlk == nil {
 					return nil, errNilBlock
@@ -492,8 +564,8 @@ func (bs *Server) getBlindedSSZBlockBellatrix(ctx context.Context, blk interface
 func (bs *Server) getBlindedSSZBlockCapella(ctx context.Context, blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.SSZContainer, error) {
 	capellaBlk, err := blk.PbCapellaBlock()
 	if err != nil {
-		// ErrUnsupportedGetter means that we have another block type
-		if errors.Is(err, blocks.ErrUnsupportedGetter) {
+		// ErrUnsupportedField means that we have another block type
+		if errors.Is(err, consensus_types.ErrUnsupportedField) {
 			if blindedCapellaBlk, err := blk.PbBlindedCapellaBlock(); err == nil {
 				if blindedCapellaBlk == nil {
 					return nil, errNilBlock
@@ -570,7 +642,7 @@ func (bs *Server) submitBlindedBellatrixBlock(ctx context.Context, blindedBellat
 		Signature: sig,
 	})
 	if err != nil {
-		return status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
+		return status.Errorf(codes.Internal, "Could not convert block: %v", err)
 	}
 	_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedBellatrix{
@@ -578,6 +650,9 @@ func (bs *Server) submitBlindedBellatrixBlock(ctx context.Context, blindedBellat
 		},
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
 		return status.Errorf(codes.Internal, "Could not propose blinded block: %v", err)
 	}
 	return nil
@@ -589,7 +664,7 @@ func (bs *Server) submitBlindedCapellaBlock(ctx context.Context, blindedCapellaB
 		Signature: sig,
 	})
 	if err != nil {
-		return status.Errorf(codes.Internal, "Could not get blinded block: %v", err)
+		return status.Errorf(codes.Internal, "Could not convert block: %v", err)
 	}
 	_, err = bs.V1Alpha1ValidatorServer.ProposeBeaconBlock(ctx, &eth.GenericSignedBeaconBlock{
 		Block: &eth.GenericSignedBeaconBlock_BlindedCapella{
@@ -597,6 +672,9 @@ func (bs *Server) submitBlindedCapellaBlock(ctx context.Context, blindedCapellaB
 		},
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), validator.CouldNotDecodeBlock) {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
 		return status.Errorf(codes.Internal, "Could not propose blinded block: %v", err)
 	}
 	return nil

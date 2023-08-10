@@ -3,9 +3,9 @@ package attestations
 import (
 	"context"
 
-	"github.com/prysmaticlabs/prysm/v3/beacon-chain/operations/attestations/kv"
-	"github.com/prysmaticlabs/prysm/v3/consensus-types/primitives"
-	ethpb "github.com/prysmaticlabs/prysm/v3/proto/prysm/v1alpha1"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/operations/attestations/kv"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
 )
 
 // Pool defines the necessary methods for Prysm attestations pool to serve
@@ -15,7 +15,6 @@ import (
 type Pool interface {
 	// For Aggregated attestations
 	AggregateUnaggregatedAttestations(ctx context.Context) error
-	AggregateUnaggregatedAttestationsBySlotIndex(ctx context.Context, slot primitives.Slot, committeeIndex primitives.CommitteeIndex) error
 	SaveAggregatedAttestation(att *ethpb.Attestation) error
 	SaveAggregatedAttestations(atts []*ethpb.Attestation) error
 	AggregatedAttestations() []*ethpb.Attestation
