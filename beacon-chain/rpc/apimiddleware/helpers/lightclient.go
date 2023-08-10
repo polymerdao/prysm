@@ -86,6 +86,70 @@ func NewExecutionPayloadHeaderFromJSON(headerJSON *ethrpc.ExecutionPayloadHeader
 	return header, nil
 }
 
+func NewExecutionPayloadHeaderCapellaFromJSON(headerJSON *ethrpc.ExecutionPayloadHeaderCapellaJson) (*v11.ExecutionPayloadHeaderCapella,
+	error) {
+	header := &v11.ExecutionPayloadHeaderCapella{}
+	var err error
+	if header.ParentHash, err = hexutil.Decode(headerJSON.ParentHash); err != nil {
+		return nil, err
+	}
+	if header.FeeRecipient, err = hexutil.Decode(headerJSON.FeeRecipient); err != nil {
+		return nil, err
+	}
+	if header.StateRoot, err = hexutil.Decode(headerJSON.StateRoot); err != nil {
+		return nil, err
+	}
+	if header.ReceiptsRoot, err = hexutil.Decode(headerJSON.ReceiptsRoot); err != nil {
+		return nil, err
+	}
+	if header.LogsBloom, err = hexutil.Decode(headerJSON.LogsBloom); err != nil {
+		return nil, err
+	}
+	if header.PrevRandao, err = hexutil.Decode(headerJSON.PrevRandao); err != nil {
+		return nil, err
+	}
+	if header.BlockNumber, err = strconv.ParseUint(headerJSON.BlockNumber, 10, 64); err != nil {
+		return nil, err
+	}
+	if header.GasLimit, err = strconv.ParseUint(headerJSON.GasLimit, 10, 64); err != nil {
+		return nil, err
+	}
+	if header.GasUsed, err = strconv.ParseUint(headerJSON.GasUsed, 10, 64); err != nil {
+		return nil, err
+	}
+	if header.Timestamp, err = strconv.ParseUint(headerJSON.TimeStamp, 10, 64); err != nil {
+		return nil, err
+	}
+	if header.ExtraData, err = hexutil.Decode(headerJSON.ExtraData); err != nil {
+		return nil, err
+	}
+
+	if header.BaseFeePerGas, err = bytesFromBigInt(headerJSON.BaseFeePerGas); err != nil {
+		return nil, err
+	}
+	if len(header.BaseFeePerGas) > 32 {
+		return nil, errors.New("base fee per gas is too long")
+	} else if len(header.BaseFeePerGas) < 32 {
+		padded := make([]byte, 32-len(header.BaseFeePerGas))
+		header.BaseFeePerGas = append(padded, header.BaseFeePerGas...)
+	}
+	for i := 0; i < len(header.BaseFeePerGas)/2; i++ {
+		header.BaseFeePerGas[i], header.BaseFeePerGas[len(header.BaseFeePerGas)-1-i] =
+			header.BaseFeePerGas[len(header.BaseFeePerGas)-1-i], header.BaseFeePerGas[i]
+	}
+
+	if header.BlockHash, err = hexutil.Decode(headerJSON.BlockHash); err != nil {
+		return nil, err
+	}
+	if header.TransactionsRoot, err = hexutil.Decode(headerJSON.TransactionsRoot); err != nil {
+		return nil, err
+	}
+	if header.WithdrawalsRoot, err = hexutil.Decode(headerJSON.WithdrawalsRoot); err != nil {
+		return nil, err
+	}
+	return header, nil
+}
+
 func NewSyncAggregateFromJSON(syncAggregateJSON *ethrpc.SyncAggregateJson) (*ethpbv1.SyncAggregate, error) {
 	syncAggregate := &ethpbv1.SyncAggregate{}
 	var err error
