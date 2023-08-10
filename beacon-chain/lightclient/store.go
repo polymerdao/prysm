@@ -390,7 +390,7 @@ func (s *Store) maybeValidateAndProcessUpdate(lightClientUpdate *ethpbv2.LightCl
 	if syncCommiteeBits.Count()*3 >= syncCommiteeBits.Len()*2 &&
 		((update.FinalizedHeader != nil && update.FinalizedHeader.Slot > s.FinalizedHeader.Slot) ||
 			updateHasFinalizedNextSyncCommittee) {
-		// Normal update throught 2/3 threshold
+		// Normal update through 2/3 threshold
 		if err := s.applyUpdate(update.LightClientUpdate); err != nil {
 			return err
 		}
