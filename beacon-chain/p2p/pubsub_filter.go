@@ -8,6 +8,7 @@ import (
 	pubsubpb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p/encoder"
+	"github.com/prysmaticlabs/prysm/v4/config/features"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/prysmaticlabs/prysm/v4/network/forks"
 )
@@ -37,7 +38,15 @@ func (s *Service) CanSubscribe(topic string) bool {
 	if parts[1] != "eth2" {
 		return false
 	}
-	phase0ForkDigest, err := s.currentForkDigest()
+
+	var phase0ForkDigest [4]byte
+	var err error
+	if features.Get().PolymerDevnetMode {
+		phase0ForkDigest, err = forks.ForkDigestFromEpoch(params.BeaconConfig().GenesisEpoch, s.genesisValidatorsRoot)
+	} else {
+		phase0ForkDigest, err = s.currentForkDigest()
+	}
+
 	if err != nil {
 		log.WithError(err).Error("Could not determine fork digest")
 		return false
