@@ -61,7 +61,10 @@ type Flags struct {
 	SaveFullExecutionPayloads bool // Save full beacon blocks with execution payloads in the database.
 	EnableStartOptimistic     bool // EnableStartOptimistic treats every block as optimistic at startup.
 
-	DisableResourceManager     bool // Disables running the node with libp2p's resource manager.
+	DisableResourceManager bool // Disables running the node with libp2p's resource manager.
+
+	PolymerDevnetMode bool // A special mode for Polymer devkit
+
 	DisableStakinContractCheck bool // Disables check for deposit contract when proposing blocks
 
 	EnableVerboseSigVerification bool // EnableVerboseSigVerification specifies whether to verify individual signature if batch verification fails
@@ -217,6 +220,10 @@ func ConfigureBeaconChain(ctx *cli.Context) error {
 		logEnabled(SaveFullExecutionPayloads)
 		cfg.SaveFullExecutionPayloads = true
 	}
+	if ctx.Bool(PolymerDevnetMode.Name) {
+		logEnabled(PolymerDevnetMode)
+		cfg.PolymerDevnetMode = true
+	}
 	if ctx.Bool(enableStartupOptimistic.Name) {
 		logEnabled(enableStartupOptimistic)
 		cfg.EnableStartOptimistic = true
@@ -294,6 +301,11 @@ func ConfigureValidator(ctx *cli.Context) error {
 		logEnabled(EnableBeaconRESTApi)
 		cfg.EnableBeaconRESTApi = true
 	}
+	if ctx.Bool(PolymerDevnetMode.Name) {
+		logEnabled(PolymerDevnetMode)
+		cfg.PolymerDevnetMode = true
+	}
+
 	cfg.KeystoreImportDebounceInterval = ctx.Duration(dynamicKeyReloadDebounceInterval.Name)
 	Init(cfg)
 	return nil
