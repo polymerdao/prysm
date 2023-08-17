@@ -6,7 +6,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
 	ethpb "github.com/prysmaticlabs/prysm/v4/proto/prysm/v1alpha1"
 	"google.golang.org/grpc/codes"
@@ -92,8 +91,14 @@ func (ds *Server) getPeer(pid peer.ID) (*ethpb.DebugPeerResponse, error) {
 	if err != nil || !ok {
 		aVersion = ""
 	}
+
+	var sProtocols []string
+	for _, p := range protocols {
+		sProtocols = append(sProtocols, string(p))
+	}
+
 	peerInfo := &ethpb.DebugPeerResponse_PeerInfo{
-		Protocols:       protocol.ConvertToStrings(protocols),
+		Protocols:       sProtocols,
 		FaultCount:      uint64(resp),
 		ProtocolVersion: pVersion,
 		AgentVersion:    aVersion,
