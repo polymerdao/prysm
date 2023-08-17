@@ -115,6 +115,10 @@ var (
 			" (Warning): Once enabled, this feature migrates your database in to a new schema and " +
 			"there is no going back. At worst, your entire database might get corrupted.",
 	}
+	PolymerDevnetMode = &cli.BoolFlag{
+		Name:  "enable-polymer-devnet-mode",
+		Usage: "This will enable fast devnet chain mode for Polymer devkit",
+	}
 	enableStartupOptimistic = &cli.BoolFlag{
 		Name:   "startup-optimistic",
 		Usage:  "Treats every block as optimistically synced at launch. Use with caution",
@@ -190,6 +194,7 @@ var ValidatorFlags = append(deprecatedFlags, []cli.Flag{
 	enableSlashingProtectionPruning,
 	enableDoppelGangerProtection,
 	EnableBeaconRESTApi,
+	PolymerDevnetMode,
 }...)
 
 // E2EValidatorFlags contains a list of the validator feature flags to be tested in E2E.
@@ -206,6 +211,7 @@ var BeaconChainFlags = append(deprecatedBeaconFlags, append(deprecatedFlags, []c
 	PraterTestnet,
 	SepoliaTestnet,
 	Mainnet,
+	PolymerDevnetMode,
 	disablePeerScorer,
 	disableBroadcastSlashingFlag,
 	enableSlasherFlag,

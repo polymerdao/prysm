@@ -63,6 +63,7 @@ type Service struct {
 	clockWaiter                   startup.ClockWaiter
 	syncComplete                  chan struct{}
 	blobNotifiers                 *blobNotifierMap
+	processAttestationsLock       sync.Mutex
 	lastPublishedLightClientEpoch primitives.Epoch
 }
 
