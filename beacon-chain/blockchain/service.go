@@ -65,6 +65,7 @@ type Service struct {
 	blobNotifiers                 *blobNotifierMap
 	blockBeingSynced              *currentlySyncingBlock
 	lastPublishedLightClientEpoch primitives.Epoch
+	processAttestationsLock       sync.Mutex
 }
 
 // config options for the service.
