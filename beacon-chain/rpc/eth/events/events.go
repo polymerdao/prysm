@@ -14,6 +14,7 @@ import (
 	enginev1 "github.com/prysmaticlabs/prysm/v4/proto/engine/v1"
 	ethpbservice "github.com/prysmaticlabs/prysm/v4/proto/eth/service"
 	ethpb "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	ethpbv2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 	"github.com/prysmaticlabs/prysm/v4/proto/migration"
 	"github.com/prysmaticlabs/prysm/v4/runtime/version"
 	"github.com/prysmaticlabs/prysm/v4/time/slots"
@@ -43,6 +44,8 @@ const (
 	BLSToExecutionChangeTopic = "bls_to_execution_change"
 	// PayloadAttributesTopic represents a new payload attributes for execution payload building event topic.
 	PayloadAttributesTopic = "payload_attributes"
+	// LightClientFinalityUpdateTopic represents a new light client finality update event topic.
+	LightClientFinalityUpdateTopic = "light_client_finality_update"
 )
 
 var casesHandled = map[string]bool{
@@ -55,6 +58,7 @@ var casesHandled = map[string]bool{
 	SyncCommitteeContributionTopic: true,
 	BLSToExecutionChangeTopic:      true,
 	PayloadAttributesTopic:         true,
+	LightClientFinalityUpdateTopic: true,
 }
 
 // StreamEvents allows requesting all events from a set of topics defined in the Ethereum consensus API standard.
@@ -203,6 +207,15 @@ func (s *Server) handleStateEvents(
 			return nil
 		}
 		return streamData(stream, FinalizedCheckpointTopic, finalizedCheckpoint)
+	case statefeed.LightClientFinalityUpdate:
+		if _, ok := requestedTopics[LightClientFinalityUpdateTopic]; !ok {
+			return nil
+		}
+		update, ok := event.Data.(*ethpbv2.LightClientFinalityUpdateResponse)
+		if !ok {
+			return nil
+		}
+		return streamData(stream, LightClientFinalityUpdateTopic, update)
 	case statefeed.Reorg:
 		if _, ok := requestedTopics[ChainReorgTopic]; !ok {
 			return nil
