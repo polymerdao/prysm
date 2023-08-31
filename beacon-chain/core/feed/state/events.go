@@ -29,6 +29,8 @@ const (
 	MissedSlot
 	// LightClientFinalityUpdate event
 	LightClientFinalityUpdate
+	// LightClientOptimisticUpdate event
+	LightClientOptimisticUpdate
 )
 
 // BlockProcessedData is the data sent with BlockProcessed events.
