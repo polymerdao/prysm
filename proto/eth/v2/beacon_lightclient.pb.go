@@ -7,13 +7,14 @@
 package eth
 
 import (
-	_ "github.com/prysmaticlabs/prysm/v4/proto/eth/ext"
+	reflect "reflect"
+	sync "sync"
+
 	github_com_prysmaticlabs_prysm_v4_consensus_types_primitives "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	_ "github.com/prysmaticlabs/prysm/v4/proto/eth/ext"
 	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	reflect "reflect"
-	sync "sync"
 )
 
 const (
