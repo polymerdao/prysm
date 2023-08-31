@@ -60,7 +60,7 @@ var file_proto_eth_service_beacon_chain_service_proto_rawDesc = []byte{
 	0x2f, 0x76, 0x32, 0x2f, 0x73, 0x79, 0x6e, 0x63, 0x5f, 0x63, 0x6f, 0x6d, 0x6d, 0x69, 0x74, 0x74,
 	0x65, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x1a, 0x1e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f,
 	0x65, 0x74, 0x68, 0x2f, 0x76, 0x32, 0x2f, 0x77, 0x69, 0x74, 0x68, 0x64, 0x72, 0x61, 0x77, 0x61,
-	0x6c, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x32, 0x9c, 0x29, 0x0a, 0x0b, 0x42, 0x65, 0x61,
+	0x6c, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x32, 0xc7, 0x2a, 0x0a, 0x0b, 0x42, 0x65, 0x61,
 	0x63, 0x6f, 0x6e, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x12, 0x6f, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x47,
 	0x65, 0x6e, 0x65, 0x73, 0x69, 0x73, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e,
 	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x20,
@@ -390,17 +390,28 @@ var file_proto_eth_service_beacon_chain_service_proto_rawDesc = []byte{
 	0x65, 0x22, 0x34, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x2e, 0x12, 0x2c, 0x2f, 0x69, 0x6e, 0x74, 0x65,
 	0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x65, 0x74, 0x68, 0x2f, 0x76, 0x31, 0x2f, 0x62, 0x65, 0x61, 0x63,
 	0x6f, 0x6e, 0x2f, 0x6c, 0x69, 0x67, 0x68, 0x74, 0x5f, 0x63, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x2f,
-	0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x73, 0x42, 0x98, 0x01, 0x0a, 0x18, 0x6f, 0x72, 0x67, 0x2e,
-	0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x73, 0x65, 0x72,
-	0x76, 0x69, 0x63, 0x65, 0x42, 0x17, 0x42, 0x65, 0x61, 0x63, 0x6f, 0x6e, 0x43, 0x68, 0x61, 0x69,
-	0x6e, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a,
-	0x33, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x72, 0x79, 0x73,
-	0x6d, 0x61, 0x74, 0x69, 0x63, 0x6c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f,
-	0x76, 0x34, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x65, 0x74, 0x68, 0x2f, 0x73, 0x65, 0x72,
-	0x76, 0x69, 0x63, 0x65, 0xaa, 0x02, 0x14, 0x45, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e,
-	0x45, 0x74, 0x68, 0x2e, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0xca, 0x02, 0x14, 0x45, 0x74,
-	0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x5c, 0x45, 0x74, 0x68, 0x5c, 0x53, 0x65, 0x72, 0x76, 0x69,
-	0x63, 0x65, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x75, 0x70, 0x64, 0x61, 0x74, 0x65, 0x73, 0x12, 0xa8, 0x01, 0x0a, 0x1c, 0x47, 0x65, 0x74, 0x4c,
+	0x69, 0x67, 0x68, 0x74, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x69,
+	0x74, 0x79, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
+	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79,
+	0x1a, 0x32, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e,
+	0x76, 0x32, 0x2e, 0x4c, 0x69, 0x67, 0x68, 0x74, 0x43, 0x6c, 0x69, 0x65, 0x6e, 0x74, 0x46, 0x69,
+	0x6e, 0x61, 0x6c, 0x69, 0x74, 0x79, 0x55, 0x70, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x22, 0x3c, 0x82, 0xd3, 0xe4, 0x93, 0x02, 0x36, 0x12, 0x34, 0x2f, 0x69,
+	0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x65, 0x74, 0x68, 0x2f, 0x76, 0x31, 0x2f, 0x62,
+	0x65, 0x61, 0x63, 0x6f, 0x6e, 0x2f, 0x6c, 0x69, 0x67, 0x68, 0x74, 0x5f, 0x63, 0x6c, 0x69, 0x65,
+	0x6e, 0x74, 0x2f, 0x66, 0x69, 0x6e, 0x61, 0x6c, 0x69, 0x74, 0x79, 0x5f, 0x75, 0x70, 0x64, 0x61,
+	0x74, 0x65, 0x42, 0x98, 0x01, 0x0a, 0x18, 0x6f, 0x72, 0x67, 0x2e, 0x65, 0x74, 0x68, 0x65, 0x72,
+	0x65, 0x75, 0x6d, 0x2e, 0x65, 0x74, 0x68, 0x2e, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x42,
+	0x17, 0x42, 0x65, 0x61, 0x63, 0x6f, 0x6e, 0x43, 0x68, 0x61, 0x69, 0x6e, 0x53, 0x65, 0x72, 0x76,
+	0x69, 0x63, 0x65, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x33, 0x67, 0x69, 0x74, 0x68,
+	0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x61, 0x74, 0x69, 0x63,
+	0x6c, 0x61, 0x62, 0x73, 0x2f, 0x70, 0x72, 0x79, 0x73, 0x6d, 0x2f, 0x76, 0x34, 0x2f, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2f, 0x65, 0x74, 0x68, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0xaa,
+	0x02, 0x14, 0x45, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75, 0x6d, 0x2e, 0x45, 0x74, 0x68, 0x2e, 0x53,
+	0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0xca, 0x02, 0x14, 0x45, 0x74, 0x68, 0x65, 0x72, 0x65, 0x75,
+	0x6d, 0x5c, 0x45, 0x74, 0x68, 0x5c, 0x53, 0x65, 0x72, 0x76, 0x69, 0x63, 0x65, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var file_proto_eth_service_beacon_chain_service_proto_goTypes = []interface{}{
@@ -449,6 +460,7 @@ var file_proto_eth_service_beacon_chain_service_proto_goTypes = []interface{}{
 	(*v1.DepositContractResponse)(nil),                   // 42: ethereum.eth.v1.DepositContractResponse
 	(*v2.LightClientBootstrapResponse)(nil),              // 43: ethereum.eth.v2.LightClientBootstrapResponse
 	(*v2.LightClientUpdatesByRangeResponse)(nil),         // 44: ethereum.eth.v2.LightClientUpdatesByRangeResponse
+	(*v2.LightClientFinalityUpdateResponse)(nil),         // 45: ethereum.eth.v2.LightClientFinalityUpdateResponse
 }
 var file_proto_eth_service_beacon_chain_service_proto_depIdxs = []int32{
 	0,  // 0: ethereum.eth.service.BeaconChain.GetGenesis:input_type -> google.protobuf.Empty
@@ -486,43 +498,45 @@ var file_proto_eth_service_beacon_chain_service_proto_depIdxs = []int32{
 	0,  // 32: ethereum.eth.service.BeaconChain.GetDepositContract:input_type -> google.protobuf.Empty
 	17, // 33: ethereum.eth.service.BeaconChain.GetLightClientBootstrap:input_type -> ethereum.eth.v2.LightClientBootstrapRequest
 	18, // 34: ethereum.eth.service.BeaconChain.GetLightClientUpdatesByRange:input_type -> ethereum.eth.v2.LightClientUpdatesByRangeRequest
-	19, // 35: ethereum.eth.service.BeaconChain.GetGenesis:output_type -> ethereum.eth.v1.GenesisResponse
-	20, // 36: ethereum.eth.service.BeaconChain.GetWeakSubjectivity:output_type -> ethereum.eth.v1.WeakSubjectivityResponse
-	21, // 37: ethereum.eth.service.BeaconChain.GetStateRoot:output_type -> ethereum.eth.v1.StateRootResponse
-	22, // 38: ethereum.eth.service.BeaconChain.GetStateFork:output_type -> ethereum.eth.v1.StateForkResponse
-	23, // 39: ethereum.eth.service.BeaconChain.GetFinalityCheckpoints:output_type -> ethereum.eth.v1.StateFinalityCheckpointResponse
-	24, // 40: ethereum.eth.service.BeaconChain.ListValidators:output_type -> ethereum.eth.v1.StateValidatorsResponse
-	25, // 41: ethereum.eth.service.BeaconChain.GetValidator:output_type -> ethereum.eth.v1.StateValidatorResponse
-	26, // 42: ethereum.eth.service.BeaconChain.ListValidatorBalances:output_type -> ethereum.eth.v1.ValidatorBalancesResponse
-	27, // 43: ethereum.eth.service.BeaconChain.ListCommittees:output_type -> ethereum.eth.v1.StateCommitteesResponse
-	28, // 44: ethereum.eth.service.BeaconChain.ListSyncCommittees:output_type -> ethereum.eth.v2.StateSyncCommitteesResponse
-	29, // 45: ethereum.eth.service.BeaconChain.GetRandao:output_type -> ethereum.eth.v2.RandaoResponse
-	30, // 46: ethereum.eth.service.BeaconChain.ListBlockHeaders:output_type -> ethereum.eth.v1.BlockHeadersResponse
-	31, // 47: ethereum.eth.service.BeaconChain.GetBlockHeader:output_type -> ethereum.eth.v1.BlockHeaderResponse
-	0,  // 48: ethereum.eth.service.BeaconChain.SubmitBlock:output_type -> google.protobuf.Empty
-	0,  // 49: ethereum.eth.service.BeaconChain.SubmitBlockSSZ:output_type -> google.protobuf.Empty
-	0,  // 50: ethereum.eth.service.BeaconChain.SubmitBlindedBlock:output_type -> google.protobuf.Empty
-	0,  // 51: ethereum.eth.service.BeaconChain.SubmitBlindedBlockSSZ:output_type -> google.protobuf.Empty
-	32, // 52: ethereum.eth.service.BeaconChain.GetBlock:output_type -> ethereum.eth.v1.BlockResponse
-	33, // 53: ethereum.eth.service.BeaconChain.GetBlockSSZ:output_type -> ethereum.eth.v1.BlockSSZResponse
-	34, // 54: ethereum.eth.service.BeaconChain.GetBlockV2:output_type -> ethereum.eth.v2.BlockResponseV2
-	35, // 55: ethereum.eth.service.BeaconChain.GetBlindedBlock:output_type -> ethereum.eth.v2.BlindedBlockResponse
-	11, // 56: ethereum.eth.service.BeaconChain.GetBlindedBlockSSZ:output_type -> ethereum.eth.v2.SSZContainer
-	11, // 57: ethereum.eth.service.BeaconChain.GetBlockSSZV2:output_type -> ethereum.eth.v2.SSZContainer
-	36, // 58: ethereum.eth.service.BeaconChain.ListBlockAttestations:output_type -> ethereum.eth.v1.BlockAttestationsResponse
-	37, // 59: ethereum.eth.service.BeaconChain.ListPoolAttesterSlashings:output_type -> ethereum.eth.v1.AttesterSlashingsPoolResponse
-	0,  // 60: ethereum.eth.service.BeaconChain.SubmitAttesterSlashing:output_type -> google.protobuf.Empty
-	38, // 61: ethereum.eth.service.BeaconChain.ListPoolProposerSlashings:output_type -> ethereum.eth.v1.ProposerSlashingPoolResponse
-	0,  // 62: ethereum.eth.service.BeaconChain.SubmitProposerSlashing:output_type -> google.protobuf.Empty
-	0,  // 63: ethereum.eth.service.BeaconChain.SubmitSignedBLSToExecutionChanges:output_type -> google.protobuf.Empty
-	39, // 64: ethereum.eth.service.BeaconChain.ListBLSToExecutionChanges:output_type -> ethereum.eth.v2.BLSToExecutionChangesPoolResponse
-	40, // 65: ethereum.eth.service.BeaconChain.GetForkSchedule:output_type -> ethereum.eth.v1.ForkScheduleResponse
-	41, // 66: ethereum.eth.service.BeaconChain.GetSpec:output_type -> ethereum.eth.v1.SpecResponse
-	42, // 67: ethereum.eth.service.BeaconChain.GetDepositContract:output_type -> ethereum.eth.v1.DepositContractResponse
-	43, // 68: ethereum.eth.service.BeaconChain.GetLightClientBootstrap:output_type -> ethereum.eth.v2.LightClientBootstrapResponse
-	44, // 69: ethereum.eth.service.BeaconChain.GetLightClientUpdatesByRange:output_type -> ethereum.eth.v2.LightClientUpdatesByRangeResponse
-	35, // [35:70] is the sub-list for method output_type
-	0,  // [0:35] is the sub-list for method input_type
+	0,  // 35: ethereum.eth.service.BeaconChain.GetLightClientFinalityUpdate:input_type -> google.protobuf.Empty
+	19, // 36: ethereum.eth.service.BeaconChain.GetGenesis:output_type -> ethereum.eth.v1.GenesisResponse
+	20, // 37: ethereum.eth.service.BeaconChain.GetWeakSubjectivity:output_type -> ethereum.eth.v1.WeakSubjectivityResponse
+	21, // 38: ethereum.eth.service.BeaconChain.GetStateRoot:output_type -> ethereum.eth.v1.StateRootResponse
+	22, // 39: ethereum.eth.service.BeaconChain.GetStateFork:output_type -> ethereum.eth.v1.StateForkResponse
+	23, // 40: ethereum.eth.service.BeaconChain.GetFinalityCheckpoints:output_type -> ethereum.eth.v1.StateFinalityCheckpointResponse
+	24, // 41: ethereum.eth.service.BeaconChain.ListValidators:output_type -> ethereum.eth.v1.StateValidatorsResponse
+	25, // 42: ethereum.eth.service.BeaconChain.GetValidator:output_type -> ethereum.eth.v1.StateValidatorResponse
+	26, // 43: ethereum.eth.service.BeaconChain.ListValidatorBalances:output_type -> ethereum.eth.v1.ValidatorBalancesResponse
+	27, // 44: ethereum.eth.service.BeaconChain.ListCommittees:output_type -> ethereum.eth.v1.StateCommitteesResponse
+	28, // 45: ethereum.eth.service.BeaconChain.ListSyncCommittees:output_type -> ethereum.eth.v2.StateSyncCommitteesResponse
+	29, // 46: ethereum.eth.service.BeaconChain.GetRandao:output_type -> ethereum.eth.v2.RandaoResponse
+	30, // 47: ethereum.eth.service.BeaconChain.ListBlockHeaders:output_type -> ethereum.eth.v1.BlockHeadersResponse
+	31, // 48: ethereum.eth.service.BeaconChain.GetBlockHeader:output_type -> ethereum.eth.v1.BlockHeaderResponse
+	0,  // 49: ethereum.eth.service.BeaconChain.SubmitBlock:output_type -> google.protobuf.Empty
+	0,  // 50: ethereum.eth.service.BeaconChain.SubmitBlockSSZ:output_type -> google.protobuf.Empty
+	0,  // 51: ethereum.eth.service.BeaconChain.SubmitBlindedBlock:output_type -> google.protobuf.Empty
+	0,  // 52: ethereum.eth.service.BeaconChain.SubmitBlindedBlockSSZ:output_type -> google.protobuf.Empty
+	32, // 53: ethereum.eth.service.BeaconChain.GetBlock:output_type -> ethereum.eth.v1.BlockResponse
+	33, // 54: ethereum.eth.service.BeaconChain.GetBlockSSZ:output_type -> ethereum.eth.v1.BlockSSZResponse
+	34, // 55: ethereum.eth.service.BeaconChain.GetBlockV2:output_type -> ethereum.eth.v2.BlockResponseV2
+	35, // 56: ethereum.eth.service.BeaconChain.GetBlindedBlock:output_type -> ethereum.eth.v2.BlindedBlockResponse
+	11, // 57: ethereum.eth.service.BeaconChain.GetBlindedBlockSSZ:output_type -> ethereum.eth.v2.SSZContainer
+	11, // 58: ethereum.eth.service.BeaconChain.GetBlockSSZV2:output_type -> ethereum.eth.v2.SSZContainer
+	36, // 59: ethereum.eth.service.BeaconChain.ListBlockAttestations:output_type -> ethereum.eth.v1.BlockAttestationsResponse
+	37, // 60: ethereum.eth.service.BeaconChain.ListPoolAttesterSlashings:output_type -> ethereum.eth.v1.AttesterSlashingsPoolResponse
+	0,  // 61: ethereum.eth.service.BeaconChain.SubmitAttesterSlashing:output_type -> google.protobuf.Empty
+	38, // 62: ethereum.eth.service.BeaconChain.ListPoolProposerSlashings:output_type -> ethereum.eth.v1.ProposerSlashingPoolResponse
+	0,  // 63: ethereum.eth.service.BeaconChain.SubmitProposerSlashing:output_type -> google.protobuf.Empty
+	0,  // 64: ethereum.eth.service.BeaconChain.SubmitSignedBLSToExecutionChanges:output_type -> google.protobuf.Empty
+	39, // 65: ethereum.eth.service.BeaconChain.ListBLSToExecutionChanges:output_type -> ethereum.eth.v2.BLSToExecutionChangesPoolResponse
+	40, // 66: ethereum.eth.service.BeaconChain.GetForkSchedule:output_type -> ethereum.eth.v1.ForkScheduleResponse
+	41, // 67: ethereum.eth.service.BeaconChain.GetSpec:output_type -> ethereum.eth.v1.SpecResponse
+	42, // 68: ethereum.eth.service.BeaconChain.GetDepositContract:output_type -> ethereum.eth.v1.DepositContractResponse
+	43, // 69: ethereum.eth.service.BeaconChain.GetLightClientBootstrap:output_type -> ethereum.eth.v2.LightClientBootstrapResponse
+	44, // 70: ethereum.eth.service.BeaconChain.GetLightClientUpdatesByRange:output_type -> ethereum.eth.v2.LightClientUpdatesByRangeResponse
+	45, // 71: ethereum.eth.service.BeaconChain.GetLightClientFinalityUpdate:output_type -> ethereum.eth.v2.LightClientFinalityUpdateResponse
+	36, // [36:72] is the sub-list for method output_type
+	0,  // [0:36] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -602,6 +616,7 @@ type BeaconChainClient interface {
 	GetDepositContract(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*v1.DepositContractResponse, error)
 	GetLightClientBootstrap(ctx context.Context, in *v2.LightClientBootstrapRequest, opts ...grpc.CallOption) (*v2.LightClientBootstrapResponse, error)
 	GetLightClientUpdatesByRange(ctx context.Context, in *v2.LightClientUpdatesByRangeRequest, opts ...grpc.CallOption) (*v2.LightClientUpdatesByRangeResponse, error)
+	GetLightClientFinalityUpdate(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*v2.LightClientFinalityUpdateResponse, error)
 }
 
 type beaconChainClient struct {
@@ -930,6 +945,15 @@ func (c *beaconChainClient) GetLightClientUpdatesByRange(ctx context.Context, in
 	return out, nil
 }
 
+func (c *beaconChainClient) GetLightClientFinalityUpdate(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*v2.LightClientFinalityUpdateResponse, error) {
+	out := new(v2.LightClientFinalityUpdateResponse)
+	err := c.cc.Invoke(ctx, "/ethereum.eth.service.BeaconChain/GetLightClientFinalityUpdate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BeaconChainServer is the server API for BeaconChain service.
 type BeaconChainServer interface {
 	GetGenesis(context.Context, *empty.Empty) (*v1.GenesisResponse, error)
@@ -970,6 +994,7 @@ type BeaconChainServer interface {
 	GetDepositContract(context.Context, *empty.Empty) (*v1.DepositContractResponse, error)
 	GetLightClientBootstrap(context.Context, *v2.LightClientBootstrapRequest) (*v2.LightClientBootstrapResponse, error)
 	GetLightClientUpdatesByRange(context.Context, *v2.LightClientUpdatesByRangeRequest) (*v2.LightClientUpdatesByRangeResponse, error)
+	GetLightClientFinalityUpdate(context.Context, *empty.Empty) (*v2.LightClientFinalityUpdateResponse, error)
 }
 
 // UnimplementedBeaconChainServer can be embedded to have forward compatible implementations.
@@ -1080,6 +1105,9 @@ func (*UnimplementedBeaconChainServer) GetLightClientBootstrap(context.Context, 
 }
 func (*UnimplementedBeaconChainServer) GetLightClientUpdatesByRange(context.Context, *v2.LightClientUpdatesByRangeRequest) (*v2.LightClientUpdatesByRangeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetLightClientUpdatesByRange not implemented")
+}
+func (*UnimplementedBeaconChainServer) GetLightClientFinalityUpdate(context.Context, *empty.Empty) (*v2.LightClientFinalityUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLightClientFinalityUpdate not implemented")
 }
 
 func RegisterBeaconChainServer(s *grpc.Server, srv BeaconChainServer) {
@@ -1716,6 +1744,24 @@ func _BeaconChain_GetLightClientUpdatesByRange_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BeaconChain_GetLightClientFinalityUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(empty.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BeaconChainServer).GetLightClientFinalityUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ethereum.eth.service.BeaconChain/GetLightClientFinalityUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BeaconChainServer).GetLightClientFinalityUpdate(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _BeaconChain_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "ethereum.eth.service.BeaconChain",
 	HandlerType: (*BeaconChainServer)(nil),
@@ -1859,6 +1905,10 @@ var _BeaconChain_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetLightClientUpdatesByRange",
 			Handler:    _BeaconChain_GetLightClientUpdatesByRange_Handler,
+		},
+		{
+			MethodName: "GetLightClientFinalityUpdate",
+			Handler:    _BeaconChain_GetLightClientFinalityUpdate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
