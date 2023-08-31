@@ -464,5 +464,14 @@ service BeaconChain {
       get: "/internal/eth/v1/beacon/light_client/updates"
     };
   }
+
+  // GetLightClientFinalityUpdate retrieves the latest finality update for light client
+  //
+  // Spec: https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/getLightClientFinalityUpdate
+  rpc GetLightClientFinalityUpdate(google.protobuf.Empty) returns (v2.LightClientFinalityUpdateResponse) {
+    option (google.api.http) = {
+      get: "/internal/eth/v1/beacon/light_client/finality_update"
+    };
+  }
 }
 
