@@ -46,6 +46,7 @@ ssz_gen_marshal(
         "SignedBeaconBlockCapella",
         "SignedBlindedBeaconBlockCapella",
         "SignedBlsToExecutionChange",
+        "SyncCommittee",
     ],
 )
 
