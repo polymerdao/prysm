@@ -123,6 +123,19 @@ type LightClientUpdateJson struct {
 	SignatureSlot           string                 `json:"signature_slot"`
 }
 
+type LightClientFinalityUpdateResponseJson struct {
+	Version string                         `json:"version" enum:"true"`
+	Data    *LightClientFinalityUpdateJson `json:"data"`
+}
+
+type LightClientFinalityUpdateJson struct {
+	AttestedHeader  *BeaconBlockHeaderJson `json:"attested_header"`
+	FinalizedHeader *BeaconBlockHeaderJson `json:"finalized_header"`
+	FinalityBranch  []string               `json:"finality_branch" hex:"true"`
+	SyncAggregate   *SyncAggregateJson     `json:"sync_aggregate"`
+	SignatureSlot   string                 `json:"signature_slot"`
+}
+
 type BlockHeadersResponseJson struct {
 	Data                []*BlockHeaderContainerJson `json:"data"`
 	ExecutionOptimistic bool                        `json:"execution_optimistic"`
