@@ -101,6 +101,17 @@ type RandaoResponseJson struct {
 	Finalized           bool `json:"finalized"`
 }
 
+type LightClientBootstrapResponseJson struct {
+	Version string                    `json:"version" enum:"true"`
+	Data    *LightClientBootstrapJson `json:"data"`
+}
+
+type LightClientBootstrapJson struct {
+	Header                     *BeaconBlockHeaderJson `json:"header"`
+	CurrentSyncCommittee       *SyncCommitteeJson     `json:"current_sync_committee"`
+	CurrentSyncCommitteeBranch []string               `json:"current_sync_committee_branch" hex:"true"`
+}
+
 type BlockHeadersResponseJson struct {
 	Data                []*BlockHeaderContainerJson `json:"data"`
 	ExecutionOptimistic bool                        `json:"execution_optimistic"`
