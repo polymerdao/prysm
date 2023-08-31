@@ -40,6 +40,7 @@ func (_ *BeaconEndpointFactory) Paths() []string {
 		"/eth/v1/beacon/pool/bls_to_execution_changes",
 		"/eth/v1/beacon/weak_subjectivity",
 		"/eth/v1/beacon/light_client/bootstrap/{block_root}",
+		"/eth/v1/beacon/light_client/updates",
 		"/eth/v1/node/identity",
 		"/eth/v1/node/peers",
 		"/eth/v1/node/peers/{peer_id}",
@@ -148,6 +149,11 @@ func (_ *BeaconEndpointFactory) Create(path string) (*apimiddleware.Endpoint, er
 		endpoint.GetResponse = &WeakSubjectivityResponse{}
 	case "/eth/v1/beacon/light_client/bootstrap/{block_root}":
 		endpoint.GetResponse = &LightClientBootstrapResponseJson{}
+	case "/eth/v1/beacon/light_client/updates":
+		endpoint.GetResponse = &[]*LightClientUpdateResponseJson{}
+		endpoint.Hooks = apimiddleware.HookCollection{
+			OnPreDeserializeGrpcResponseBodyIntoContainer: prepareLightClientUpdates,
+		}
 	case "/eth/v1/node/identity":
 		endpoint.GetResponse = &IdentityResponseJson{}
 	case "/eth/v1/node/peers":
