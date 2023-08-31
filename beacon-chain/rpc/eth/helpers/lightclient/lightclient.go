@@ -370,3 +370,23 @@ func NewLightClientUpdateFromBeaconState(
 	result.NextSyncCommitteeBranch = nextSyncCommitteeBranch
 	return result, nil
 }
+
+// NewLightClientFinalityUpdateFromUpdate - implements https://github.com/ethereum/consensus-specs/blob/3d235740e5f1e641d3b160c8688f26e7dc5a1894/specs/altair/light-client/full-node.md#create_light_client_finality_update
+// def create_light_client_finality_update(update: LightClientUpdate) -> LightClientFinalityUpdate:
+//
+//	return LightClientFinalityUpdate(
+//	    attested_header=update.attested_header,
+//	    finalized_header=update.finalized_header,
+//	    finality_branch=update.finality_branch,
+//	    sync_aggregate=update.sync_aggregate,
+//	    signature_slot=update.signature_slot,
+//	)
+func NewLightClientFinalityUpdateFromUpdate(update *ethpbv2.LightClientUpdate) *ethpbv2.LightClientFinalityUpdate {
+	return &ethpbv2.LightClientFinalityUpdate{
+		AttestedHeader:  update.AttestedHeader,
+		FinalizedHeader: update.FinalizedHeader,
+		FinalityBranch:  update.FinalityBranch,
+		SyncAggregate:   update.SyncAggregate,
+		SignatureSlot:   update.SignatureSlot,
+	}
+}

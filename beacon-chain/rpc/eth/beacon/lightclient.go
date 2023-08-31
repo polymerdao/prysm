@@ -2,7 +2,9 @@ package beacon
 
 import (
 	"context"
+	"math"
 
+	"github.com/golang/protobuf/ptypes/empty"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -197,4 +199,122 @@ func (bs *Server) GetLightClientUpdatesByRange(ctx context.Context, req *ethpbv2
 	}
 
 	return &result, nil
+}
+
+// GetLightClientFinalityUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/finality_update.yaml
+func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
+	_ *empty.Empty) (*ethpbv2.LightClientFinalityUpdateResponse, error) {
+	// Prepare
+	ctx, span := trace.StartSpan(ctx, "beacon.GetLightClientFinalityUpdate")
+	defer span.End()
+
+	// Finality update needs super majority of sync committee signatures
+	config := params.BeaconConfig()
+	minSignatures := uint64(math.Ceil(float64(config.MinSyncCommitteeParticipants) * 2 / 3))
+
+	block, err := bs.getLightClientEventBlock(ctx, minSignatures)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get block and state: %v", err)
+	}
+
+	state, err := bs.Stater.StateBySlot(ctx, block.Block().Slot())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+	}
+
+	// Get attested state
+	attestedRoot := block.Block().ParentRoot()
+	attestedBlock, err := bs.BeaconDB.Block(ctx, attestedRoot)
+	if err != nil || attestedBlock == nil {
+		return nil, status.Errorf(codes.Internal, "Could not get attested block: %v", err)
+	}
+
+	attestedSlot := attestedBlock.Block().Slot()
+	attestedState, err := bs.Stater.StateBySlot(ctx, attestedSlot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
+	}
+
+	// Get finalized block
+	var finalizedBlock interfaces.ReadOnlySignedBeaconBlock
+	finalizedCheckPoint := attestedState.FinalizedCheckpoint()
+	if finalizedCheckPoint != nil {
+		finalizedRoot := bytesutil.ToBytes32(finalizedCheckPoint.Root)
+		finalizedBlock, err = bs.BeaconDB.Block(ctx, finalizedRoot)
+		if err != nil {
+			finalizedBlock = nil
+		}
+	}
+
+	update, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+		ctx,
+		config,
+		state,
+		block,
+		attestedState,
+		finalizedBlock,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	finalityUpdate := lightclienthelpers.NewLightClientFinalityUpdateFromUpdate(update)
+
+	// Return the result
+	result := &ethpbv2.LightClientFinalityUpdateResponse{
+		Version: ethpbv2.Version(attestedState.Version()),
+		Data:    finalityUpdate,
+	}
+
+	return result, nil
+}
+
+// getLightClientEventBlock - returns the block that should be used for light client events, which satisfies the minimum number of signatures from sync committee
+func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesRequired uint64) (interfaces.ReadOnlySignedBeaconBlock, error) {
+	// Get the current state
+	state, err := bs.HeadFetcher.HeadState(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get head state: %v", err)
+	}
+
+	// Get the block
+	latestBlockHeader := *state.LatestBlockHeader()
+	stateRoot, err := state.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get state root: %v", err)
+	}
+	latestBlockHeader.StateRoot = stateRoot[:]
+	latestBlockHeaderRoot, err := latestBlockHeader.HashTreeRoot()
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get latest block header root: %v", err)
+	}
+
+	block, err := bs.BeaconDB.Block(ctx, latestBlockHeaderRoot)
+	if err != nil || block == nil {
+		return nil, status.Errorf(codes.Internal, "Could not get latest block: %v", err)
+	}
+
+	// Loop through the blocks until we find a block that has super majority of sync committee signatures (2/3)
+	var numOfSyncCommitteeSignatures uint64
+	if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil && syncAggregate != nil {
+		numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+	}
+
+	for numOfSyncCommitteeSignatures < minSignaturesRequired {
+		// Get the parent block
+		parentRoot := block.Block().ParentRoot()
+		block, err = bs.BeaconDB.Block(ctx, parentRoot)
+		if err != nil || block == nil {
+			return nil, status.Errorf(codes.Internal, "Could not get parent block: %v", err)
+		}
+
+		// Get the number of sync committee signatures
+		numOfSyncCommitteeSignatures = 0
+		if syncAggregate, err := block.Block().Body().SyncAggregate(); err == nil && syncAggregate != nil {
+			numOfSyncCommitteeSignatures = syncAggregate.SyncCommitteeBits.Count()
+		}
+	}
+
+	return block, nil
 }
