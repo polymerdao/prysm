@@ -137,7 +137,9 @@ func (s *Service) ReceiveBlock(ctx context.Context, block interfaces.ReadOnlySig
 		go s.sendNewFinalizedEvent(blockCopy, postState)
 		depCtx, cancel := context.WithTimeout(context.Background(), depositDeadline)
 		go func() {
-			s.insertFinalizedDeposits(depCtx, finalized.Root)
+			if err := s.insertFinalizedDeposits(depCtx, finalized.Root); err != nil {
+				log.WithError(err).Error("Could not insert finalized deposits.")
+			}
 			cancel()
 		}()
 	}
