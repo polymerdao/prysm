@@ -238,7 +238,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	EpochsPerSyncCommitteePeriod: 256,
 
 	// Updated penalty values.
-	InactivityPenaltyQuotientAltair:         3 * 1 << 24, //50331648
+	InactivityPenaltyQuotientAltair:         3 * 1 << 24, // 50331648
 	MinSlashingPenaltyQuotientAltair:        64,
 	ProportionalSlashingMultiplierAltair:    2,
 	MinSlashingPenaltyQuotientBellatrix:     32,
@@ -247,6 +247,7 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 
 	// Light client
 	MinSyncCommitteeParticipants: 1,
+	MaxRequestLightClientUpdates: 128,
 
 	// Bellatrix
 	TerminalBlockHashActivationEpoch: 18446744073709551615,

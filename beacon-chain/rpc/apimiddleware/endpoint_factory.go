@@ -14,7 +14,7 @@ func (f *BeaconEndpointFactory) IsNil() bool {
 }
 
 // Paths is a collection of all valid beacon chain API paths.
-func (_ *BeaconEndpointFactory) Paths() []string {
+func (*BeaconEndpointFactory) Paths() []string {
 	return []string{
 		"/eth/v1/beacon/genesis",
 		"/eth/v1/beacon/states/{state_id}/root",
@@ -43,6 +43,10 @@ func (_ *BeaconEndpointFactory) Paths() []string {
 		"/eth/v1/beacon/pool/sync_committees",
 		"/eth/v1/beacon/pool/bls_to_execution_changes",
 		"/eth/v1/beacon/weak_subjectivity",
+		"/eth/v1/beacon/light_client/bootstrap/{block_root}",
+		"/eth/v1/beacon/light_client/updates",
+		"/eth/v1/beacon/light_client/finality_update",
+		"/eth/v1/beacon/light_client/optimistic_update",
 		"/eth/v1/node/identity",
 		"/eth/v1/node/peers",
 		"/eth/v1/node/peers/{peer_id}",
@@ -79,7 +83,7 @@ func (_ *BeaconEndpointFactory) Paths() []string {
 }
 
 // Create returns a new endpoint for the provided API path.
-func (_ *BeaconEndpointFactory) Create(path string) (*apimiddleware.Endpoint, error) {
+func (*BeaconEndpointFactory) Create(path string) (*apimiddleware.Endpoint, error) {
 	endpoint := apimiddleware.DefaultEndpoint()
 	switch path {
 	case "/eth/v1/beacon/genesis":
@@ -178,6 +182,17 @@ func (_ *BeaconEndpointFactory) Create(path string) (*apimiddleware.Endpoint, er
 		}
 	case "/eth/v1/beacon/weak_subjectivity":
 		endpoint.GetResponse = &WeakSubjectivityResponse{}
+	case "/eth/v1/beacon/light_client/bootstrap/{block_root}":
+		endpoint.GetResponse = &LightClientBootstrapResponseJson{}
+	case "/eth/v1/beacon/light_client/updates":
+		endpoint.GetResponse = &[]*LightClientUpdateResponseJson{}
+		endpoint.Hooks = apimiddleware.HookCollection{
+			OnPreDeserializeGrpcResponseBodyIntoContainer: prepareLightClientUpdates,
+		}
+	case "/eth/v1/beacon/light_client/finality_update":
+		endpoint.GetResponse = &LightClientFinalityUpdateResponseJson{}
+	case "/eth/v1/beacon/light_client/optimistic_update":
+		endpoint.GetResponse = &LightClientOptimisticUpdateResponseJson{}
 	case "/eth/v1/node/identity":
 		endpoint.GetResponse = &IdentityResponseJson{}
 	case "/eth/v1/node/peers":

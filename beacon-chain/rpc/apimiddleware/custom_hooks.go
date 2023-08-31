@@ -279,11 +279,11 @@ func setInitialPublishBlockPostRequest(endpoint *apimiddleware.Endpoint,
 	_ http.ResponseWriter,
 	req *http.Request,
 ) (apimiddleware.RunDefault, apimiddleware.ErrorJson) {
-	s := struct {
+	var s struct {
 		Message struct {
 			Slot string
 		}
-	}{}
+	}
 
 	buf, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -363,11 +363,11 @@ func setInitialPublishBlindedBlockPostRequest(endpoint *apimiddleware.Endpoint,
 	_ http.ResponseWriter,
 	req *http.Request,
 ) (apimiddleware.RunDefault, apimiddleware.ErrorJson) {
-	s := struct {
+	var s struct {
 		Message struct {
 			Slot string
 		}
-	}{}
+	}
 
 	buf, err := io.ReadAll(req.Body)
 	if err != nil {
@@ -449,6 +449,28 @@ type tempSyncCommitteeValidatorsJson struct {
 
 type tempSyncSubcommitteeValidatorsJson struct {
 	Validators []string `json:"validators"`
+}
+
+type tempLightClientUpdatesByRangeJson struct {
+	Updates []*LightClientUpdateResponseJson `json:"updates"`
+}
+
+// https://ethereum.github.io/beacon-APIs/?urls.primaryName=dev#/Beacon/getLightClientUpdatesByRange
+// grpc-gateway returns a struct with slice embedded, but spec says it should be a list directly instead of a struct.
+func prepareLightClientUpdates(body []byte, responseContainer interface{}) (apimiddleware.RunDefault, apimiddleware.ErrorJson) {
+	var grpcResponse tempLightClientUpdatesByRangeJson
+	if err := json.Unmarshal(body, &grpcResponse); err != nil {
+		return false, apimiddleware.InternalServerErrorWithMessage(err, "could not unmarshal response into temp container")
+	}
+
+	container, ok := responseContainer.(*[]*LightClientUpdateResponseJson)
+	if !ok {
+		return false, apimiddleware.InternalServerError(errors.New("container is not of the correct type"))
+	}
+
+	*container = append(*container, grpcResponse.Updates...)
+
+	return false, nil
 }
 
 // https://ethereum.github.io/beacon-APIs/?urls.primaryName=v2.0.0#/Beacon/getEpochSyncCommittees returns validator_aggregates as a nested array.

@@ -46,6 +46,7 @@ ssz_gen_marshal(
         "SignedBeaconBlockCapella",
         "SignedBlindedBeaconBlockCapella",
         "SignedBlsToExecutionChange",
+        "SyncCommittee",
     ],
 )
 
@@ -92,6 +93,7 @@ go_library(
 ssz_proto_files(
     name = "ssz_proto_files",
     srcs = [
+        "beacon_lightclient.proto",
         "beacon_state.proto",
         "sync_committee.proto",
         "validator.proto",
