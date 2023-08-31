@@ -212,7 +212,7 @@ func (s *Service) fillInForkChoiceMissingBlocks(ctx context.Context, blk interfa
 
 // inserts finalized deposits into our finalized deposit trie, needs to be
 // called in the background
-func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) {
+func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) error {
 	ctx, span := trace.StartSpan(ctx, "blockChain.insertFinalizedDeposits")
 	defer span.End()
 	startTime := time.Now()
@@ -220,34 +220,32 @@ func (s *Service) insertFinalizedDeposits(ctx context.Context, fRoot [32]byte) {
 	// Update deposit cache.
 	finalizedState, err := s.cfg.StateGen.StateByRoot(ctx, fRoot)
 	if err != nil {
-		log.WithError(err).Error("could not fetch finalized state")
-		return
+		return errors.Wrap(err, "could not fetch finalized state")
 	}
 	// We update the cache up to the last deposit index in the finalized block's state.
 	// We can be confident that these deposits will be included in some block
 	// because the Eth1 follow distance makes such long-range reorgs extremely unlikely.
 	eth1DepositIndex, err := mathutil.Int(finalizedState.Eth1DepositIndex())
 	if err != nil {
-		log.WithError(err).Error("could not cast eth1 deposit index")
-		return
+		return errors.Wrap(err, "could not cast eth1 deposit index")
 	}
 	// The deposit index in the state is always the index of the next deposit
 	// to be included(rather than the last one to be processed). This was most likely
 	// done as the state cannot represent signed integers.
 	finalizedEth1DepIdx := eth1DepositIndex - 1
 	if err = s.cfg.DepositCache.InsertFinalizedDeposits(ctx, int64(finalizedEth1DepIdx)); err != nil {
-		log.WithError(err).Error("could not insert finalized deposits")
-		return
+		return errors.Wrap(err, "could not insert finalized deposits")
 	}
 	// Deposit proofs are only used during state transition and can be safely removed to save space.
 	if err = s.cfg.DepositCache.PruneProofs(ctx, int64(finalizedEth1DepIdx)); err != nil {
-		log.WithError(err).Error("could not prune deposit proofs")
+		return errors.Wrap(err, "could not prune deposit proofs")
 	}
 	// Prune deposits which have already been finalized, the below method prunes all pending deposits (non-inclusive) up
 	// to the provided eth1 deposit index.
 	s.cfg.DepositCache.PrunePendingDeposits(ctx, int64(eth1DepositIndex)) // lint:ignore uintcast -- Deposit index should not exceed int64 in your lifetime.
 
 	log.WithField("duration", time.Since(startTime).String()).Debug("Finalized deposit insertion completed")
+	return nil
 }
 
 // This ensures that the input root defaults to using genesis root instead of zero hashes. This is needed for handling
