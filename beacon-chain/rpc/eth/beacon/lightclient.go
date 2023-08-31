@@ -270,6 +270,62 @@ func (bs *Server) GetLightClientFinalityUpdate(ctx context.Context,
 	return result, nil
 }
 
+// GetLightClientOptimisticUpdate - implements https://github.com/ethereum/beacon-APIs/blob/263f4ed6c263c967f13279c7a9f5629b51c5fc55/apis/beacon/light_client/optimistic_update.yaml
+func (bs *Server) GetLightClientOptimisticUpdate(ctx context.Context,
+	_ *empty.Empty) (*ethpbv2.LightClientOptimisticUpdateResponse, error) {
+	// Prepare
+	ctx, span := trace.StartSpan(ctx, "beacon.GetLightClientOptimisticUpdate")
+	defer span.End()
+
+	config := params.BeaconConfig()
+	minSignatures := config.MinSyncCommitteeParticipants
+
+	block, err := bs.getLightClientEventBlock(ctx, minSignatures)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get block and state: %v", err)
+	}
+
+	state, err := bs.Stater.StateBySlot(ctx, block.Block().Slot())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get state: %v", err)
+	}
+
+	// Get attested state
+	attestedRoot := block.Block().ParentRoot()
+	attestedBlock, err := bs.BeaconDB.Block(ctx, attestedRoot)
+	if err != nil || attestedBlock == nil {
+		return nil, status.Errorf(codes.Internal, "Could not get attested block: %v", err)
+	}
+
+	attestedSlot := attestedBlock.Block().Slot()
+	attestedState, err := bs.Stater.StateBySlot(ctx, attestedSlot)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Could not get attested state: %v", err)
+	}
+
+	update, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
+		ctx,
+		config,
+		state,
+		block,
+		attestedState,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	optimisticUpdate := lightclienthelpers.NewLightClientOptimisticUpdateFromUpdate(update)
+
+	// Return the result
+	result := &ethpbv2.LightClientOptimisticUpdateResponse{
+		Version: ethpbv2.Version(attestedState.Version()),
+		Data:    optimisticUpdate,
+	}
+
+	return result, nil
+}
+
 // getLightClientEventBlock - returns the block that should be used for light client events, which satisfies the minimum number of signatures from sync committee
 func (bs *Server) getLightClientEventBlock(ctx context.Context, minSignaturesRequired uint64) (interfaces.ReadOnlySignedBeaconBlock, error) {
 	// Get the current state

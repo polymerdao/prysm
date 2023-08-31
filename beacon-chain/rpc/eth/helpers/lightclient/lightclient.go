@@ -390,3 +390,19 @@ func NewLightClientFinalityUpdateFromUpdate(update *ethpbv2.LightClientUpdate) *
 		SignatureSlot:   update.SignatureSlot,
 	}
 }
+
+// NewLightClientOptimisticUpdateFromUpdate - implements https://github.com/ethereum/consensus-specs/blob/3d235740e5f1e641d3b160c8688f26e7dc5a1894/specs/altair/light-client/full-node.md#create_light_client_optimistic_update
+// def create_light_client_optimistic_update(update: LightClientUpdate) -> LightClientOptimisticUpdate:
+//
+//	return LightClientOptimisticUpdate(
+//	    attested_header=update.attested_header,
+//	    sync_aggregate=update.sync_aggregate,
+//	    signature_slot=update.signature_slot,
+//	)
+func NewLightClientOptimisticUpdateFromUpdate(update *ethpbv2.LightClientUpdate) *ethpbv2.LightClientOptimisticUpdate {
+	return &ethpbv2.LightClientOptimisticUpdate{
+		AttestedHeader: update.AttestedHeader,
+		SyncAggregate:  update.SyncAggregate,
+		SignatureSlot:  update.SignatureSlot,
+	}
+}
