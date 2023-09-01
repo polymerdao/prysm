@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
+
 	"github.com/prysmaticlabs/prysm/v4/async/abool"
 	mockChain "github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/p2p"
@@ -93,13 +95,13 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
 				assert.NoError(t, err)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
-				rpcMap := make(map[string]bool)
+				rpcMap := make(map[protocol.ID]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-					rpcMap[string(p)] = true
+					rpcMap[p] = true
 				}
-				assert.Equal(t, true, rpcMap[p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
-				assert.Equal(t, true, rpcMap[p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
-				assert.Equal(t, true, rpcMap[p2p.RPCMetaDataTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()], "topic doesn't exist")
+				assert.Equal(t, true, rpcMap[protocol.ID(p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())], "topic doesn't exist")
+				assert.Equal(t, true, rpcMap[protocol.ID(p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())], "topic doesn't exist")
+				assert.Equal(t, true, rpcMap[protocol.ID(p2p.RPCMetaDataTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())], "topic doesn't exist")
 			},
 		},
 		{
@@ -137,9 +139,9 @@ func TestService_CheckForNextEpochFork(t *testing.T) {
 				digest, err := forks.ForkDigestFromEpoch(5, genRoot[:])
 				assert.NoError(t, err)
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
-				rpcMap := make(map[string]bool)
+				rpcMap := make(map[protocol.ID]bool)
 				for _, p := range s.cfg.p2p.Host().Mux().Protocols() {
-					rpcMap[string(p)] = true
+					rpcMap[p] = true
 				}
 			},
 		},
@@ -193,16 +195,16 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 			wantErr:   false,
 			postSvcCheck: func(t *testing.T, s *Service) {
 				ptcls := s.cfg.p2p.Host().Mux().Protocols()
-				pMap := make(map[string]bool)
+				pMap := make(map[protocol.ID]bool)
 				for _, p := range ptcls {
-					pMap[string(p)] = true
+					pMap[p] = true
 				}
-				assert.Equal(t, true, pMap[p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCPingTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCMetaDataTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCBlocksByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCBlocksByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCPingTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCMetaDataTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCBlocksByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCBlocksByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
 			},
 		},
 		{
@@ -264,20 +266,20 @@ func TestService_CheckForPreviousEpochFork(t *testing.T) {
 				assert.Equal(t, true, s.subHandler.digestExists(digest))
 
 				ptcls := s.cfg.p2p.Host().Mux().Protocols()
-				pMap := make(map[string]bool)
+				pMap := make(map[protocol.ID]bool)
 				for _, p := range ptcls {
-					pMap[string(p)] = true
+					pMap[p] = true
 				}
-				assert.Equal(t, true, pMap[p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCPingTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCMetaDataTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, true, pMap[p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix()])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCGoodByeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCStatusTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCPingTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCMetaDataTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCBlocksByRangeTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, true, pMap[protocol.ID(p2p.RPCBlocksByRootTopicV2+s.cfg.p2p.Encoding().ProtocolSuffix())])
 
-				assert.Equal(t, false, pMap[p2p.RPCMetaDataTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, false, pMap[p2p.RPCBlocksByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
-				assert.Equal(t, false, pMap[p2p.RPCBlocksByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix()])
+				assert.Equal(t, false, pMap[protocol.ID(p2p.RPCMetaDataTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, false, pMap[protocol.ID(p2p.RPCBlocksByRangeTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
+				assert.Equal(t, false, pMap[protocol.ID(p2p.RPCBlocksByRootTopicV1+s.cfg.p2p.Encoding().ProtocolSuffix())])
 			},
 		},
 		{
