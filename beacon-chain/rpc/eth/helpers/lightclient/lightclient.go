@@ -220,3 +220,21 @@ func NewLightClientOptimisticUpdateFromUpdate(update *ethpbv2.LightClientUpdate)
 		SignatureSlot:  update.SignatureSlot,
 	}
 }
+
+func NewLightClientUpdateFromFinalityUpdate(update *ethpbv2.LightClientFinalityUpdate) *ethpbv2.LightClientUpdate {
+	return &ethpbv2.LightClientUpdate{
+		AttestedHeader:  update.AttestedHeader,
+		FinalizedHeader: update.FinalizedHeader,
+		FinalityBranch:  update.FinalityBranch,
+		SyncAggregate:   update.SyncAggregate,
+		SignatureSlot:   update.SignatureSlot,
+	}
+}
+
+func NewLightClientUpdateFromOptimisticUpdate(update *ethpbv2.LightClientOptimisticUpdate) *ethpbv2.LightClientUpdate {
+	return &ethpbv2.LightClientUpdate{
+		AttestedHeader: update.AttestedHeader,
+		SyncAggregate:  update.SyncAggregate,
+		SignatureSlot:  update.SignatureSlot,
+	}
+}
