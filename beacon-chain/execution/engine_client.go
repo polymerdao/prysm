@@ -602,6 +602,10 @@ func (s *Service) ReconstructFullBlock(
 	}
 
 	executionBlockHash := common.BytesToHash(header.BlockHash())
+	log.WithFields(logrus.Fields{
+		"hash": fmt.Sprintf("%#x", executionBlockHash),
+	}).Info("xxx going to retrieve execution payload by hash")
+
 	payload, err := s.retrievePayloadFromExecutionHash(ctx, executionBlockHash, header, blindedBlock.Version())
 	if err != nil {
 		return nil, err
