@@ -12,16 +12,18 @@ import (
 
 // ConfigJSON is the JSON representation of the light client config.
 type ConfigJSON struct {
+	DenebForkEpoch               string `json:"deneb_fork_epoch"`
+	DenebForkVersion             string `json:"deneb_fork_version"               hex:"true"`
 	CapellaForkEpoch             string `json:"capella_fork_epoch"`
-	CapellaForkVersion           string `json:"capella_fork_version" hex:"true"`
+	CapellaForkVersion           string `json:"capella_fork_version"             hex:"true"`
 	BellatrixForkEpoch           string `json:"bellatrix_fork_epoch"`
-	BellatrixForkVersion         string `json:"bellatrix_fork_version" hex:"true"`
+	BellatrixForkVersion         string `json:"bellatrix_fork_version"           hex:"true"`
 	AltairForkEpoch              string `json:"altair_fork_epoch"`
-	AltairForkVersion            string `json:"altair_fork_version" hex:"true"`
-	GenesisForkVersion           string `json:"genesis_fork_version" hex:"true"`
+	AltairForkVersion            string `json:"altair_fork_version"              hex:"true"`
+	GenesisForkVersion           string `json:"genesis_fork_version"             hex:"true"`
 	MinSyncCommitteeParticipants string `json:"min_sync_committee_participants"`
 	GenesisSlot                  string `json:"genesis_slot"`
-	DomainSyncCommittee          string `json:"domain_sync_committee" hex:"true"`
+	DomainSyncCommittee          string `json:"domain_sync_committee"            hex:"true"`
 	SlotsPerEpoch                string `json:"slots_per_epoch"`
 	EpochsPerSyncCommitteePeriod string `json:"epochs_per_sync_committee_period"`
 	SecondsPerSlot               string `json:"seconds_per_slot"`
@@ -30,6 +32,8 @@ type ConfigJSON struct {
 // Config is the light client configuration. It consists of the subset of the beacon chain configuration relevant to the
 // light client. Unlike the beacon chain configuration it is serializable to JSON, hence it's a separate object.
 type Config struct {
+	DenebForkEpoch               types.Epoch
+	DenebForkVersion             []byte
 	CapellaForkEpoch             types.Epoch
 	CapellaForkVersion           []byte
 	BellatrixForkEpoch           types.Epoch
@@ -48,6 +52,8 @@ type Config struct {
 // NewConfig creates a new light client configuration from a beacon chain configuration.
 func NewConfig(chainConfig *params.BeaconChainConfig) *Config {
 	return &Config{
+		DenebForkEpoch:               chainConfig.DenebForkEpoch,
+		DenebForkVersion:             chainConfig.DenebForkVersion,
 		CapellaForkEpoch:             chainConfig.CapellaForkEpoch,
 		CapellaForkVersion:           chainConfig.CapellaForkVersion,
 		BellatrixForkEpoch:           chainConfig.BellatrixForkEpoch,
@@ -66,6 +72,8 @@ func NewConfig(chainConfig *params.BeaconChainConfig) *Config {
 
 func (c *Config) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&ConfigJSON{
+		DenebForkEpoch:               strconv.FormatUint(uint64(c.DenebForkEpoch), 10),
+		DenebForkVersion:             hexutil.Encode(c.DenebForkVersion),
 		CapellaForkEpoch:             strconv.FormatUint(uint64(c.CapellaForkEpoch), 10),
 		CapellaForkVersion:           hexutil.Encode(c.CapellaForkVersion),
 		BellatrixForkEpoch:           strconv.FormatUint(uint64(c.BellatrixForkEpoch), 10),
@@ -88,6 +96,15 @@ func (c *Config) UnmarshalJSON(input []byte) error {
 		return err
 	}
 	var config Config
+
+	denebForkEpoch, err := strconv.ParseUint(configJSON.DenebForkEpoch, 10, 64)
+	if err != nil {
+		return err
+	}
+	config.DenebForkEpoch = types.Epoch(denebForkEpoch)
+	if config.DenebForkVersion, err = hexutil.Decode(configJSON.DenebForkVersion); err != nil {
+		return err
+	}
 	capellaForkEpoch, err := strconv.ParseUint(configJSON.CapellaForkEpoch, 10, 64)
 	if err != nil {
 		return err
