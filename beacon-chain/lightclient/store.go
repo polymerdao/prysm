@@ -4,12 +4,8 @@
 package lightclient
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 
-	ethrpc "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware/helpers"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
 
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
@@ -44,48 +40,6 @@ type Store struct {
 	// CurrentMaxActiveParticipants is the max number of active participants in a sync committee (used to calculate
 	// safety threshold)
 	CurrentMaxActiveParticipants uint64 `json:"current_max_active_participants,omitempty"`
-}
-
-// UnmarshalUpdateFromJSON allows to go from a strictly typed JSON update to a generic light client update. It can be used by
-// callers to propagate updates of different types over a single endpoint, and receivers to process it as a generic
-// update (e.g., by calling Store.ProcessUpdate()).
-func UnmarshalUpdateFromJSON(typedUpdate *ethrpc.TypedLightClientUpdateJson) (*ethpbv2.LightClientUpdate, error) {
-	var update *ethpbv2.LightClientUpdate
-	switch typedUpdate.TypeName {
-	case ethrpc.LightClientUpdateTypeName:
-		var fullUpdate ethrpc.LightClientUpdateJson
-		err := json.Unmarshal([]byte(typedUpdate.Data), &fullUpdate)
-		if err != nil {
-			return nil, err
-		}
-		update, err = helpers.NewLightClientUpdateFromJSON(&fullUpdate)
-		if err != nil {
-			return nil, err
-		}
-	case ethrpc.LightClientFinalityUpdateTypeName:
-		var finalityUpdate ethrpc.LightClientFinalityUpdateJson
-		err := json.Unmarshal([]byte(typedUpdate.Data), &finalityUpdate)
-		if err != nil {
-			return nil, err
-		}
-		update, err = helpers.NewLightClientUpdateFromFinalityUpdateJSON(&finalityUpdate)
-		if err != nil {
-			return nil, err
-		}
-	case ethrpc.LightClientOptimisticUpdateTypeName:
-		var optimisticUpdate ethrpc.LightClientOptimisticUpdateJson
-		err := json.Unmarshal([]byte(typedUpdate.Data), &optimisticUpdate)
-		if err != nil {
-			return nil, err
-		}
-		update, err = helpers.NewLightClientUpdateFromOptimisticUpdateJSON(&optimisticUpdate)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unknown update type %q", typedUpdate.TypeName)
-	}
-	return update, nil
 }
 
 // getSubtreeIndex implements get_subtree_index from the spec.

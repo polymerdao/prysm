@@ -149,17 +149,6 @@ func (_ *BeaconEndpointFactory) Create(path string) (*apimiddleware.Endpoint, er
 		}
 	case "/eth/v1/beacon/weak_subjectivity":
 		endpoint.GetResponse = &WeakSubjectivityResponse{}
-	case "/eth/v1/beacon/light_client/bootstrap/{block_root}":
-		endpoint.GetResponse = &LightClientBootstrapResponseJson{}
-	case "/eth/v1/beacon/light_client/updates":
-		endpoint.GetResponse = &[]*LightClientUpdateResponseJson{}
-		endpoint.Hooks = apimiddleware.HookCollection{
-			OnPreDeserializeGrpcResponseBodyIntoContainer: prepareLightClientUpdates,
-		}
-	case "/eth/v1/beacon/light_client/finality_update":
-		endpoint.GetResponse = &LightClientFinalityUpdateResponseJson{}
-	case "/eth/v1/beacon/light_client/optimistic_update":
-		endpoint.GetResponse = &LightClientOptimisticUpdateResponseJson{}
 	case "/eth/v1/node/identity":
 		endpoint.GetResponse = &IdentityResponseJson{}
 	case "/eth/v1/node/peers":
