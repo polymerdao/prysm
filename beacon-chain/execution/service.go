@@ -6,7 +6,6 @@ package execution
 import (
 	"context"
 	"fmt"
-	"github.com/prysmaticlabs/prysm/v4/config/features"
 	"math/big"
 	"reflect"
 	"runtime/debug"

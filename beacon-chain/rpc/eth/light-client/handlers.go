@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
 	rpchelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
@@ -31,12 +32,12 @@ func (bs *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reque
 	defer span.End()
 
 	// Get the block
-	blockRootParam := mux.Vars(req)["block_root"]
-	if blockRootParam == "" {
+	blockRootParam, err := hexutil.Decode(mux.Vars(req)["block_root"])
+	if err != nil {
 
 		// TODO refactor these errors into functions
 		errJson := &http2.DefaultErrorJson{
-			Message: "Invalid block root",
+			Message: "Invalid block root: " + err.Error(),
 			Code:    http.StatusBadRequest,
 		}
 		http2.WriteError(w, errJson)
