@@ -7,17 +7,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/altair"
 	coreblocks "github.com/prysmaticlabs/prysm/v4/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/epoch/precompute"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/validators"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/lookup"
+	rpchelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	fieldparams "github.com/prysmaticlabs/prysm/v4/config/fieldparams"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
-	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
 	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
 	http2 "github.com/prysmaticlabs/prysm/v4/network/http"
 	"github.com/prysmaticlabs/prysm/v4/runtime/version"
@@ -31,7 +28,7 @@ func (s *Server) BlockRewards(w http.ResponseWriter, r *http.Request) {
 	blockId := segments[len(segments)-1]
 
 	blk, err := s.Blocker.Block(r.Context(), []byte(blockId))
-	if errJson := handleGetBlockError(blk, err); errJson != nil {
+	if errJson := rpchelpers.HandleGetBlockErrorJson(blk, err); errJson != nil {
 		http2.WriteError(w, errJson)
 		return
 	}
@@ -233,7 +230,7 @@ func (s *Server) SyncCommitteeRewards(w http.ResponseWriter, r *http.Request) {
 	blockId := segments[len(segments)-1]
 
 	blk, err := s.Blocker.Block(r.Context(), []byte(blockId))
-	if errJson := handleGetBlockError(blk, err); errJson != nil {
+	if errJson := rpchelpers.HandleGetBlockErrorJson(blk, err); errJson != nil {
 		http2.WriteError(w, errJson)
 		return
 	}
@@ -634,26 +631,4 @@ func requestedValIndices(w http.ResponseWriter, r *http.Request, st state.Beacon
 	}
 
 	return valIndices, true
-}
-
-func handleGetBlockError(blk interfaces.ReadOnlySignedBeaconBlock, err error) *http2.DefaultErrorJson {
-	if errors.Is(err, lookup.BlockIdParseError{}) {
-		return &http2.DefaultErrorJson{
-			Message: "Invalid block ID: " + err.Error(),
-			Code:    http.StatusBadRequest,
-		}
-	}
-	if err != nil {
-		return &http2.DefaultErrorJson{
-			Message: "Could not get block from block ID: " + err.Error(),
-			Code:    http.StatusInternalServerError,
-		}
-	}
-	if err := blocks.BeaconBlockIsNil(blk); err != nil {
-		return &http2.DefaultErrorJson{
-			Message: "Could not find requested block: " + err.Error(),
-			Code:    http.StatusNotFound,
-		}
-	}
-	return nil
 }
