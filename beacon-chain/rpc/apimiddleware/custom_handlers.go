@@ -390,6 +390,10 @@ func receiveEvents(eventChan <-chan *sse.Event, w http.ResponseWriter, req *http
 				default:
 					return apimiddleware.InternalServerError(errors.New("payload version unsupported"))
 				}
+			case events.LightClientFinalityUpdateTopic:
+				data = &LightClientFinalityUpdateResponseJson{}
+			case events.LightClientOptimisticUpdateTopic:
+				data = &LightClientOptimisticUpdateResponseJson{}
 			case "error":
 				data = &EventErrorJson{}
 			default:
