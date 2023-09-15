@@ -214,6 +214,21 @@ func CreateLightClientUpdate(
 	return NewLightClientUpdateToJSON(result), nil
 }
 
+func NewLightClientFinalityUpdateFromBeaconState(
+	ctx context.Context,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState,
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
+
+	result, err := blockchain.NewLightClientFinalityUpdateFromBeaconState(ctx, state, block, attestedState, finalizedBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewLightClientUpdateToJSON(result), nil
+}
+
 func branchToJSON(branchBytes [][]byte) []string {
 	if branchBytes == nil {
 		return nil
