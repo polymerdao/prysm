@@ -36,6 +36,7 @@ import (
 	rpcBuilder "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/builder"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/debug"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/events"
+	lightclient "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/light-client"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/node"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/rewards"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/validator"
@@ -434,6 +435,13 @@ func (s *Service) Start() {
 	s.cfg.Router.HandleFunc("/eth/v1/beacon/pool/voluntary_exits", beaconChainServerV1.ListVoluntaryExits).Methods(http.MethodGet)
 	s.cfg.Router.HandleFunc("/eth/v1/beacon/pool/voluntary_exits", beaconChainServerV1.SubmitVoluntaryExit).Methods(http.MethodPost)
 	s.cfg.Router.HandleFunc("/eth/v1/beacon/pool/sync_committees", beaconChainServerV1.SubmitSyncCommitteeSignatures).Methods(http.MethodPost)
+
+	lightClientServer := &lightclient.Server{
+		BeaconDB:    s.cfg.BeaconDB,
+		Stater:      stater,
+		HeadFetcher: s.cfg.HeadFetcher,
+	}
+	s.cfg.Router.HandleFunc("/eth/v1/beacon/light_client/bootstrap/{block_root}", lightClientServer.GetLightClientBootstrap).Methods(http.MethodGet)
 
 	ethpbv1alpha1.RegisterNodeServer(s.grpcServer, nodeServer)
 	ethpbservice.RegisterBeaconNodeServer(s.grpcServer, nodeServerEth)
