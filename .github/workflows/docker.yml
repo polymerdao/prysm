@@ -16,8 +16,6 @@ jobs:
       matrix:
         binary:
           - beacon-chain
-          - prysmctl
-          - validator
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -61,7 +59,7 @@ jobs:
           REGISTRY_IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.binary }}
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           push: true
           provenance: false
           tags: ${{ steps.meta.outputs.tags }}
