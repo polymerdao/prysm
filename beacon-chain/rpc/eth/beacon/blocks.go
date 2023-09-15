@@ -11,7 +11,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db/filters"
 	rpchelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers"
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/lookup"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/prysm/v1alpha1/validator"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	consensus_types "github.com/prysmaticlabs/prysm/v4/consensus-types"
@@ -86,7 +85,7 @@ func (bs *Server) GetBlockHeader(ctx context.Context, req *ethpbv1.BlockRequest)
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +406,7 @@ func (bs *Server) GetBlock(ctx context.Context, req *ethpbv1.BlockRequest) (*eth
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +430,7 @@ func (bs *Server) GetBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequest) (*
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +452,7 @@ func (bs *Server) GetBlockV2(ctx context.Context, req *ethpbv2.BlockRequestV2) (
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +520,7 @@ func (bs *Server) GetBlockSSZV2(ctx context.Context, req *ethpbv2.BlockRequestV2
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +585,7 @@ func (bs *Server) ListBlockAttestations(ctx context.Context, req *ethpbv1.BlockR
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -610,19 +609,6 @@ func (bs *Server) ListBlockAttestations(ctx context.Context, req *ethpbv1.BlockR
 		ExecutionOptimistic: isOptimistic,
 		Finalized:           bs.FinalizationFetcher.IsFinalized(ctx, root),
 	}, nil
-}
-
-func handleGetBlockError(blk interfaces.ReadOnlySignedBeaconBlock, err error) error {
-	if invalidBlockIdErr, ok := err.(*lookup.BlockIdParseError); ok {
-		return status.Errorf(codes.InvalidArgument, "Invalid block ID: %v", invalidBlockIdErr)
-	}
-	if err != nil {
-		return status.Errorf(codes.Internal, "Could not get block from block ID: %v", err)
-	}
-	if err := blocks.BeaconBlockIsNil(blk); err != nil {
-		return status.Errorf(codes.NotFound, "Could not find requested block: %v", err)
-	}
-	return nil
 }
 
 func getBlockPhase0(blk interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.BlockResponseV2, error) {

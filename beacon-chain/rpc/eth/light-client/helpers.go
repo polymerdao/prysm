@@ -1,0 +1,395 @@
+package lightclient
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
+	lightclienthelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
+	"github.com/prysmaticlabs/prysm/v4/config/params"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
+	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
+	v2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
+	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// NewLightClientBootstrapFromBeaconState - implements https://github.com/ethereum/consensus-specs/blob/3d235740e5f1e641d3b160c8688f26e7dc5a1894/specs/altair/light-client/full-node.md#create_light_client_bootstrap
+// def create_light_client_bootstrap(state: BeaconState) -> LightClientBootstrap:
+//
+//	assert compute_epoch_at_slot(state.slot) >= ALTAIR_FORK_EPOCH
+//	assert state.slot == state.latest_block_header.slot
+//
+//	return LightClientBootstrap(
+//	    header=BeaconBlockHeader(
+//	        slot=state.latest_block_header.slot,
+//	        proposer_index=state.latest_block_header.proposer_index,
+//	        parent_root=state.latest_block_header.parent_root,
+//	        state_root=hash_tree_root(state),
+//	        body_root=state.latest_block_header.body_root,
+//	    ),
+//	    current_sync_committee=state.current_sync_committee,
+//	    current_sync_committee_branch=compute_merkle_proof_for_state(state, CURRENT_SYNC_COMMITTEE_INDEX)
+//	)
+func NewLightClientBootstrapFromBeaconState(ctx context.Context, state state.BeaconState) (*LightClientBootstrap, error) {
+	// assert compute_epoch_at_slot(state.slot) >= ALTAIR_FORK_EPOCH
+	if slots.ToEpoch(state.Slot()) < params.BeaconConfig().AltairForkEpoch {
+		return nil, fmt.Errorf("Invalid state slot: %d", state.Slot())
+	}
+
+	// assert state.slot == state.latest_block_header.slot
+	if state.Slot() != state.LatestBlockHeader().Slot {
+		return nil, fmt.Errorf("Invalid state slot: %d", state.Slot())
+	}
+
+	// Prepare data
+	latestBlockHeader := state.LatestBlockHeader()
+
+	currentSyncCommittee, err := state.CurrentSyncCommittee()
+	if err != nil {
+		return nil, fmt.Errorf("Could not get current sync committee: %v", err)
+	}
+
+	currentSyncCommitteePubkeys := currentSyncCommittee.GetPubkeys()
+	committee := apimiddleware.SyncCommitteeJson{
+		Pubkeys:         make([]string, len(currentSyncCommitteePubkeys)),
+		AggregatePubkey: hexutil.Encode(currentSyncCommittee.GetAggregatePubkey()),
+	}
+	for i, pubkey := range currentSyncCommitteePubkeys {
+		committee.Pubkeys[i] = hexutil.Encode(pubkey)
+	}
+	currentSyncCommitteeProof, err := state.CurrentSyncCommitteeProof(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Could not get current sync committee proof: %v", err)
+	}
+
+	branch := make([]string, len(currentSyncCommitteeProof))
+	for i, proof := range currentSyncCommitteeProof {
+		branch[i] = hexutil.Encode(proof)
+	}
+
+	stateRoot, err := state.HashTreeRoot(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("Could not get state root: %v", err)
+	}
+
+	// Return result
+	result := &LightClientBootstrap{
+		Header: &apimiddleware.BeaconBlockHeaderJson{
+			Slot:          strconv.FormatUint(uint64(latestBlockHeader.Slot), 10),
+			ProposerIndex: strconv.FormatUint(uint64(latestBlockHeader.ProposerIndex), 10),
+			ParentRoot:    hexutil.Encode(latestBlockHeader.ParentRoot),
+			StateRoot:     hexutil.Encode(stateRoot[:]),
+			BodyRoot:      hexutil.Encode(latestBlockHeader.BodyRoot),
+		},
+		CurrentSyncCommittee:       &committee,
+		CurrentSyncCommitteeBranch: branch,
+	}
+
+	return result, nil
+}
+
+// NewLightClientUpdateFromBeaconState - implements https://github.
+// com/ethereum/consensus-specs/blob/d70dcd9926a4bbe987f1b4e65c3e05bd029fcfb8/specs/altair/light-client/full-node.md#create_light_client_update
+// def create_light_client_update(state: BeaconState,
+//
+//	                           block: SignedBeaconBlock,
+//	                           attested_state: BeaconState,
+//	                           finalized_block: Optional[SignedBeaconBlock]) -> LightClientUpdate:
+//	assert compute_epoch_at_slot(attested_state.slot) >= ALTAIR_FORK_EPOCH
+//	assert sum(block.message.body.sync_aggregate.sync_committee_bits) >= MIN_SYNC_COMMITTEE_PARTICIPANTS
+//
+//	assert state.slot == state.latest_block_header.slot
+//	header = state.latest_block_header.copy()
+//	header.state_root = hash_tree_root(state)
+//	assert hash_tree_root(header) == hash_tree_root(block.message)
+//	update_signature_period = compute_sync_committee_period(compute_epoch_at_slot(block.message.slot))
+//
+//	assert attested_state.slot == attested_state.latest_block_header.slot
+//	attested_header = attested_state.latest_block_header.copy()
+//	attested_header.state_root = hash_tree_root(attested_state)
+//	assert hash_tree_root(attested_header) == block.message.parent_root
+//	update_attested_period = compute_sync_committee_period(compute_epoch_at_slot(attested_header.slot))
+//
+//	# `next_sync_committee` is only useful if the message is signed by the current sync committee
+//	if update_attested_period == update_signature_period:
+//	    next_sync_committee = attested_state.next_sync_committee
+//	    next_sync_committee_branch = compute_merkle_proof_for_state(attested_state, NEXT_SYNC_COMMITTEE_INDEX)
+//	else:
+//	    next_sync_committee = SyncCommittee()
+//	    next_sync_committee_branch = [Bytes32() for _ in range(floorlog2(NEXT_SYNC_COMMITTEE_INDEX))]
+//
+//	# Indicate finality whenever possible
+//	if finalized_block is not None:
+//	    if finalized_block.message.slot != GENESIS_SLOT:
+//	        finalized_header = BeaconBlockHeader(
+//	            slot=finalized_block.message.slot,
+//	            proposer_index=finalized_block.message.proposer_index,
+//	            parent_root=finalized_block.message.parent_root,
+//	            state_root=finalized_block.message.state_root,
+//	            body_root=hash_tree_root(finalized_block.message.body),
+//	        )
+//	        assert hash_tree_root(finalized_header) == attested_state.finalized_checkpoint.root
+//	    else:
+//	        assert attested_state.finalized_checkpoint.root == Bytes32()
+//	        finalized_header = BeaconBlockHeader()
+//	    finality_branch = compute_merkle_proof_for_state(attested_state, FINALIZED_ROOT_INDEX)
+//	else:
+//	    finalized_header = BeaconBlockHeader()
+//	    finality_branch = [Bytes32() for _ in range(floorlog2(FINALIZED_ROOT_INDEX))]
+//
+//	return LightClientUpdate(
+//	    attested_header=attested_header,
+//	    next_sync_committee=next_sync_committee,
+//	    next_sync_committee_branch=next_sync_committee_branch,
+//	    finalized_header=finalized_header,
+//	    finality_branch=finality_branch,
+//	    sync_aggregate=block.message.body.sync_aggregate,
+//	    signature_slot=block.message.slot,
+//	)
+func NewLightClientUpdateFromBeaconState(
+	ctx context.Context,
+	config *params.BeaconChainConfig,
+	slotsPerPeriod uint64,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState,
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
+
+	result, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+		ctx, config, state, block, attestedState, finalizedBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate next sync committee and proof
+	var nextSyncCommittee *v2.SyncCommittee
+	var nextSyncCommitteeBranch [][]byte
+
+	// update_signature_period = compute_sync_committee_period(compute_epoch_at_slot(block.message.slot))
+	updateSignaturePeriod := uint64(block.Block().Slot()) / slotsPerPeriod
+
+	// update_attested_period = compute_sync_committee_period(compute_epoch_at_slot(attested_header.slot))
+	updateAttestedPeriod := uint64(result.AttestedHeader.Slot) / slotsPerPeriod
+
+	if updateAttestedPeriod == updateSignaturePeriod {
+		tempNextSyncCommittee, err := attestedState.NextSyncCommittee()
+		if err != nil {
+			return nil, fmt.Errorf("Could not get next sync committee: %v", err)
+		}
+
+		nextSyncCommittee = &v2.SyncCommittee{
+			Pubkeys:         tempNextSyncCommittee.Pubkeys,
+			AggregatePubkey: tempNextSyncCommittee.AggregatePubkey,
+		}
+
+		nextSyncCommitteeBranch, err = attestedState.NextSyncCommitteeProof(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("Could not get next sync committee proof: %v", err)
+		}
+	} else {
+		pubKeys := make([][]byte, config.SyncCommitteeSize)
+		for i := 0; i < int(config.SyncCommitteeSize); i++ {
+			pubKeys[i] = make([]byte, 48)
+		}
+		nextSyncCommittee = &v2.SyncCommittee{
+			Pubkeys:         pubKeys,
+			AggregatePubkey: make([]byte, 48),
+		}
+
+		nextSyncCommitteeBranch = make([][]byte, 5)
+		for i := 0; i < 5; i++ {
+			nextSyncCommitteeBranch[i] = make([]byte, 32)
+		}
+	}
+
+	result.NextSyncCommittee = nextSyncCommittee
+	result.NextSyncCommitteeBranch = nextSyncCommitteeBranch
+	return NewLightClientUpdateToJSON(result), nil
+}
+
+func branchToJSON(branchBytes [][]byte) []string {
+	branch := make([]string, len(branchBytes))
+	for i, root := range branchBytes {
+		branch[i] = hexutil.Encode(root)
+	}
+	return branch
+}
+
+func headerToJSON(input *v1.BeaconBlockHeader) *apimiddleware.BeaconBlockHeaderJson {
+	return &apimiddleware.BeaconBlockHeaderJson{
+		Slot:          strconv.FormatUint(uint64(input.Slot), 10),
+		ProposerIndex: strconv.FormatUint(uint64(input.ProposerIndex), 10),
+		ParentRoot:    hexutil.Encode(input.ParentRoot),
+		StateRoot:     hexutil.Encode(input.StateRoot),
+		BodyRoot:      hexutil.Encode(input.BodyRoot),
+	}
+}
+
+func syncCommitteeToJSON(input *v2.SyncCommittee) *apimiddleware.SyncCommitteeJson {
+	syncCommittee := &apimiddleware.SyncCommitteeJson{
+		AggregatePubkey: hexutil.Encode(input.AggregatePubkey),
+		Pubkeys:         make([]string, len(input.Pubkeys)),
+	}
+	for i, pubKey := range input.Pubkeys {
+		syncCommittee.Pubkeys[i] = hexutil.Encode(pubKey)
+	}
+	return syncCommittee
+}
+
+func syncAggregateToJSON(input *v1.SyncAggregate) *apimiddleware.SyncAggregateJson {
+	return &apimiddleware.SyncAggregateJson{
+		SyncCommitteeBits:      hexutil.Encode(input.SyncCommitteeBits),
+		SyncCommitteeSignature: hexutil.Encode(input.SyncCommitteeSignature),
+	}
+}
+
+func NewLightClientUpdateToJSON(input *v2.LightClientUpdate) *LightClientUpdate {
+	return &LightClientUpdate{
+		AttestedHeader:          headerToJSON(input.AttestedHeader),
+		NextSyncCommittee:       syncCommitteeToJSON(input.NextSyncCommittee),
+		NextSyncCommitteeBranch: branchToJSON(input.NextSyncCommitteeBranch),
+		FinalizedHeader:         headerToJSON(input.FinalizedHeader),
+		FinalityBranch:          branchToJSON(input.FinalityBranch),
+		SyncAggregate:           syncAggregateToJSON(input.SyncAggregate),
+		SignatureSlot:           strconv.FormatUint(uint64(input.SignatureSlot), 10),
+	}
+}
+
+func NewLightClientFinalityUpdateFromBeaconState(
+	ctx context.Context,
+	config *params.BeaconChainConfig,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState,
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
+
+	result, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+		ctx, config, state, block, attestedState, finalizedBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewLightClientUpdateToJSON(result), nil
+}
+
+func NewLightClientOptimisticUpdateFromBeaconState(
+	ctx context.Context,
+	config *params.BeaconChainConfig,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState) (*LightClientUpdate, error) {
+
+	result, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
+		ctx, config, state, block, attestedState)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewLightClientUpdateToJSON(result), nil
+}
+
+func timeFromJSON(timestamp string) (*time.Time, error) {
+	timeInt, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	t := time.Unix(timeInt, 0)
+	return &t, nil
+}
+
+func NewGenesisResponse_GenesisFromJSON(genesisJSON *apimiddleware.GenesisResponse_GenesisJson) (*v1.GenesisResponse_Genesis, error) {
+	genesis := &v1.GenesisResponse_Genesis{}
+	genesisTime, err := timeFromJSON(genesisJSON.GenesisTime)
+	if err != nil {
+		return nil, err
+	}
+	genesis.GenesisTime = timestamppb.New(*genesisTime)
+	if genesis.GenesisValidatorsRoot, err = hexutil.Decode(genesisJSON.GenesisValidatorsRoot); err != nil {
+		return nil, err
+	}
+	if genesis.GenesisForkVersion, err = hexutil.Decode(genesisJSON.GenesisForkVersion); err != nil {
+		return nil, err
+	}
+	return genesis, nil
+}
+
+func headerFromJSON(headerJSON *apimiddleware.BeaconBlockHeaderJson) (*v1.BeaconBlockHeader, error) {
+	if headerJSON == nil {
+		return nil, nil
+	}
+	header := &v1.BeaconBlockHeader{}
+	var err error
+	slot, err := strconv.ParseUint(headerJSON.Slot, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	header.Slot = primitives.Slot(slot)
+	proposerIndex, err := strconv.ParseUint(headerJSON.ProposerIndex, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	header.ProposerIndex = primitives.ValidatorIndex(proposerIndex)
+	if header.ParentRoot, err = hexutil.Decode(headerJSON.ParentRoot); err != nil {
+		return nil, err
+	}
+	if header.StateRoot, err = hexutil.Decode(headerJSON.StateRoot); err != nil {
+		return nil, err
+	}
+	if header.BodyRoot, err = hexutil.Decode(headerJSON.BodyRoot); err != nil {
+		return nil, err
+	}
+	return header, nil
+}
+
+func syncCommitteeFromJSON(syncCommitteeJSON *apimiddleware.SyncCommitteeJson) (*v2.SyncCommittee, error) {
+	if syncCommitteeJSON == nil {
+		return nil, nil
+	}
+	syncCommittee := &v2.SyncCommittee{
+		Pubkeys: make([][]byte, len(syncCommitteeJSON.Pubkeys)),
+	}
+	for i, pubKey := range syncCommitteeJSON.Pubkeys {
+		var err error
+		if syncCommittee.Pubkeys[i], err = hexutil.Decode(pubKey); err != nil {
+			return nil, err
+		}
+	}
+	var err error
+	if syncCommittee.AggregatePubkey, err = hexutil.Decode(syncCommitteeJSON.AggregatePubkey); err != nil {
+		return nil, err
+	}
+	return syncCommittee, nil
+}
+
+func branchFromJSON(branch []string) ([][]byte, error) {
+	var branchBytes [][]byte
+	for _, root := range branch {
+		branch, err := hexutil.Decode(root)
+		if err != nil {
+			return nil, err
+		}
+		branchBytes = append(branchBytes, branch)
+	}
+	return branchBytes, nil
+}
+
+func NewLightClientBootstrapFromJSON(bootstrapJSON *LightClientBootstrap) (*v2.LightClientBootstrap, error) {
+	bootstrap := &v2.LightClientBootstrap{}
+	var err error
+	if bootstrap.Header, err = headerFromJSON(bootstrapJSON.Header); err != nil {
+		return nil, err
+	}
+	if bootstrap.CurrentSyncCommittee, err = syncCommitteeFromJSON(bootstrapJSON.CurrentSyncCommittee); err != nil {
+		return nil, err
+	}
+	if bootstrap.CurrentSyncCommitteeBranch, err = branchFromJSON(bootstrapJSON.CurrentSyncCommitteeBranch); err != nil {
+		return nil, err
+	}
+	return bootstrap, nil
+}

@@ -30,35 +30,13 @@ option php_namespace = "Ethereum\\Eth\\v2";
 
 // Beacon LightClient API related messages.
 
-message LightClientBootstrapRequest {
-    // 32 byte merkle tree root of the ssz encoded block.
-    bytes block_root = 1 [(ethereum.eth.ext.ssz_size) = "32"];
-}
-
-message LightClientBootstrapResponse {
-    v2.Version version = 1;
-    LightClientBootstrap data = 2;
-}
-
 message LightClientBootstrap {
     v1.BeaconBlockHeader header = 1;
     SyncCommittee current_sync_committee = 2;
     repeated bytes current_sync_committee_branch = 3 [(ethereum.eth.ext.ssz_size) = "current_sync_committee_branch.depth,32"];
 }
 
-message LightClientUpdatesByRangeRequest {
-    uint64 start_period = 1;
-    uint32 count = 2;
-}
-
-message LightClientUpdatesByRangeResponse {
-    repeated LightClientUpdateWithVersion updates = 1;
-}
-
-message LightClientUpdateWithVersion {
-    v2.Version version = 1;
-    LightClientUpdate data = 2;
-}
+// TODO  Can we use LightClientUpdate for both finality and optimistic updates?
 
 message LightClientUpdate {
     v1.BeaconBlockHeader attested_header = 1;
@@ -70,6 +48,7 @@ message LightClientUpdate {
     uint64 signature_slot = 7 [(ethereum.eth.ext.cast_type) = "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives.Slot"];
 }
 
+// XXX these are needed by the event streaming logic
 message LightClientFinalityUpdateResponse {
     v2.Version version = 1;
     LightClientFinalityUpdate data = 2;
