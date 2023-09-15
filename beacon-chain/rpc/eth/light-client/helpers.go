@@ -210,6 +210,23 @@ func NewLightClientUpdateFromBeaconState(
 	return NewLightClientUpdateToJSON(result), nil
 }
 
+func NewLightClientFinalityUpdateFromBeaconState(
+	ctx context.Context,
+	config *params.BeaconChainConfig,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState,
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
+
+	result, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+		ctx, config, state, block, attestedState, finalizedBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewLightClientUpdateToJSON(result), nil
+}
+
 func branchToJSON(branchBytes [][]byte) []string {
 	branch := make([]string, len(branchBytes))
 	for i, root := range branchBytes {
