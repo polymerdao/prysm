@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
@@ -11,9 +12,11 @@ import (
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
 	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
 	v2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 	"github.com/prysmaticlabs/prysm/v4/time/slots"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // NewLightClientBootstrapFromBeaconState - implements https://github.com/ethereum/consensus-specs/blob/3d235740e5f1e641d3b160c8688f26e7dc5a1894/specs/altair/light-client/full-node.md#create_light_client_bootstrap
@@ -225,6 +228,122 @@ func NewLightClientFinalityUpdateFromBeaconState(
 	}
 
 	return NewLightClientUpdateToJSON(result), nil
+}
+
+func NewLightClientOptimisticUpdateFromBeaconState(
+	ctx context.Context,
+	config *params.BeaconChainConfig,
+	state state.BeaconState,
+	block interfaces.ReadOnlySignedBeaconBlock,
+	attestedState state.BeaconState) (*LightClientUpdate, error) {
+
+	result, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
+		ctx, config, state, block, attestedState)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewLightClientUpdateToJSON(result), nil
+}
+
+func NewLightClientBootstrapFromJSON(bootstrapJSON *LightClientBootstrap) (*v2.LightClientBootstrap, error) {
+	bootstrap := &v2.LightClientBootstrap{}
+	var err error
+	if bootstrap.Header, err = headerFromJSON(bootstrapJSON.Header); err != nil {
+		return nil, err
+	}
+	if bootstrap.CurrentSyncCommittee, err = syncCommitteeFromJSON(bootstrapJSON.CurrentSyncCommittee); err != nil {
+		return nil, err
+	}
+	if bootstrap.CurrentSyncCommitteeBranch, err = branchFromJSON(bootstrapJSON.CurrentSyncCommitteeBranch); err != nil {
+		return nil, err
+	}
+	return bootstrap, nil
+}
+
+func NewGenesisResponse_GenesisFromJSON(genesisJSON *apimiddleware.GenesisResponse_GenesisJson) (*v1.GenesisResponse_Genesis, error) {
+	genesis := &v1.GenesisResponse_Genesis{}
+	genesisTime, err := timeFromJSON(genesisJSON.GenesisTime)
+	if err != nil {
+		return nil, err
+	}
+	genesis.GenesisTime = timestamppb.New(*genesisTime)
+	if genesis.GenesisValidatorsRoot, err = hexutil.Decode(genesisJSON.GenesisValidatorsRoot); err != nil {
+		return nil, err
+	}
+	if genesis.GenesisForkVersion, err = hexutil.Decode(genesisJSON.GenesisForkVersion); err != nil {
+		return nil, err
+	}
+	return genesis, nil
+}
+
+func timeFromJSON(timestamp string) (*time.Time, error) {
+	timeInt, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	t := time.Unix(timeInt, 0)
+	return &t, nil
+}
+
+func headerFromJSON(headerJSON *apimiddleware.BeaconBlockHeaderJson) (*v1.BeaconBlockHeader, error) {
+	if headerJSON == nil {
+		return nil, nil
+	}
+	header := &v1.BeaconBlockHeader{}
+	var err error
+	slot, err := strconv.ParseUint(headerJSON.Slot, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	header.Slot = primitives.Slot(slot)
+	proposerIndex, err := strconv.ParseUint(headerJSON.ProposerIndex, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+	header.ProposerIndex = primitives.ValidatorIndex(proposerIndex)
+	if header.ParentRoot, err = hexutil.Decode(headerJSON.ParentRoot); err != nil {
+		return nil, err
+	}
+	if header.StateRoot, err = hexutil.Decode(headerJSON.StateRoot); err != nil {
+		return nil, err
+	}
+	if header.BodyRoot, err = hexutil.Decode(headerJSON.BodyRoot); err != nil {
+		return nil, err
+	}
+	return header, nil
+}
+
+func syncCommitteeFromJSON(syncCommitteeJSON *apimiddleware.SyncCommitteeJson) (*v2.SyncCommittee, error) {
+	if syncCommitteeJSON == nil {
+		return nil, nil
+	}
+	syncCommittee := &v2.SyncCommittee{
+		Pubkeys: make([][]byte, len(syncCommitteeJSON.Pubkeys)),
+	}
+	for i, pubKey := range syncCommitteeJSON.Pubkeys {
+		var err error
+		if syncCommittee.Pubkeys[i], err = hexutil.Decode(pubKey); err != nil {
+			return nil, err
+		}
+	}
+	var err error
+	if syncCommittee.AggregatePubkey, err = hexutil.Decode(syncCommitteeJSON.AggregatePubkey); err != nil {
+		return nil, err
+	}
+	return syncCommittee, nil
+}
+
+func branchFromJSON(branch []string) ([][]byte, error) {
+	var branchBytes [][]byte
+	for _, root := range branch {
+		branch, err := hexutil.Decode(root)
+		if err != nil {
+			return nil, err
+		}
+		branchBytes = append(branchBytes, branch)
+	}
+	return branchBytes, nil
 }
 
 func branchToJSON(branchBytes [][]byte) []string {
