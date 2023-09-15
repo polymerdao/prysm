@@ -3,9 +3,13 @@ package helpers
 import (
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/lookup"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state/stategen"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/blocks"
+	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
+	http2 "github.com/prysmaticlabs/prysm/v4/network/http"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -46,4 +50,39 @@ func PrepareStateFetchError(err error) error {
 		return fmt.Errorf("state not found: %v", stateNotFoundErr)
 	}
 	return fmt.Errorf("could not fetch state: %v", err)
+}
+
+func HandleGetBlockError(blk interfaces.ReadOnlySignedBeaconBlock, err error) error {
+	if invalidBlockIdErr, ok := err.(*lookup.BlockIdParseError); ok {
+		return status.Errorf(codes.InvalidArgument, "Invalid block ID: %v", invalidBlockIdErr)
+	}
+	if err != nil {
+		return status.Errorf(codes.Internal, "Could not get block from block ID: %v", err)
+	}
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return status.Errorf(codes.NotFound, "Could not find requested block: %v", err)
+	}
+	return nil
+}
+
+func HandleGetBlockErrorJson(blk interfaces.ReadOnlySignedBeaconBlock, err error) *http2.DefaultErrorJson {
+	if errors.Is(err, lookup.BlockIdParseError{}) {
+		return &http2.DefaultErrorJson{
+			Message: "Invalid block ID: " + err.Error(),
+			Code:    http.StatusBadRequest,
+		}
+	}
+	if err != nil {
+		return &http2.DefaultErrorJson{
+			Message: "Could not get block from block ID: " + err.Error(),
+			Code:    http.StatusInternalServerError,
+		}
+	}
+	if err := blocks.BeaconBlockIsNil(blk); err != nil {
+		return &http2.DefaultErrorJson{
+			Message: "Could not find requested block: " + err.Error(),
+			Code:    http.StatusNotFound,
+		}
+	}
+	return nil
 }
