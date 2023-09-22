@@ -34,7 +34,7 @@ func (bs *Server) GetBlindedBlock(ctx context.Context, req *ethpbv1.BlockRequest
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func (bs *Server) GetBlindedBlockSSZ(ctx context.Context, req *ethpbv1.BlockRequ
 	defer span.End()
 
 	blk, err := bs.Blocker.Block(ctx, req.BlockId)
-	err = handleGetBlockError(blk, err)
+	err = rpchelpers.HandleGetBlockError(blk, err)
 	if err != nil {
 		return nil, err
 	}
