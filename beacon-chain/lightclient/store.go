@@ -6,8 +6,7 @@ package lightclient
 import (
 	"errors"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
-
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/signing"
 	types "github.com/prysmaticlabs/prysm/v4/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v4/container/trie"
@@ -371,13 +370,13 @@ func (s *Store) ProcessValidatedUpdate(lightClientUpdate *ethpbv2.LightClientUpd
 // ProcessFinalityUpdate implements process_light_client_finality_update from the spec.
 func (s *Store) ProcessFinalityUpdate(update *ethpbv2.LightClientFinalityUpdate, currentSlot types.Slot,
 	genesisValidatorsRoot []byte) error {
-	return s.ProcessUpdate(lightclient.NewLightClientUpdateFromFinalityUpdate(update), currentSlot,
+	return s.ProcessUpdate(blockchain.NewLightClientUpdateFromFinalityUpdate(update), currentSlot,
 		genesisValidatorsRoot)
 }
 
 // ProcessOptimisticUpdate implements process_light_client_optimistic_update from the spec.
 func (s *Store) ProcessOptimisticUpdate(update *ethpbv2.LightClientOptimisticUpdate, currentSlot types.Slot,
 	genesisValidatorsRoot []byte) error {
-	return s.ProcessUpdate(lightclient.NewLightClientUpdateFromOptimisticUpdate(update), currentSlot,
+	return s.ProcessUpdate(blockchain.NewLightClientUpdateFromOptimisticUpdate(update), currentSlot,
 		genesisValidatorsRoot)
 }

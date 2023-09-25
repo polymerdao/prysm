@@ -15,7 +15,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/core/transition"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/db"
 	forkchoicetypes "github.com/prysmaticlabs/prysm/v4/beacon-chain/forkchoice/types"
-	lightclienthelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v4/config/features"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
@@ -67,7 +66,7 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 		}
 	}
 
-	update, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+	update, err := NewLightClientFinalityUpdateFromBeaconState(
 		ctx,
 		config,
 		postState,
@@ -80,7 +79,7 @@ func (s *Service) sendLightClientFinalityUpdate(ctx context.Context, signed inte
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
 
-	finalityUpdate := lightclienthelpers.NewLightClientFinalityUpdateFromUpdate(update)
+	finalityUpdate := NewLightClientFinalityUpdateFromUpdate(update)
 
 	// Return the result
 	result := &ethpbv2.LightClientFinalityUpdateResponse{
@@ -108,7 +107,7 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 		return 0, errors.Wrap(err, "could not get attested state")
 	}
 
-	update, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
+	update, err := NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		config,
 		postState,
@@ -120,7 +119,7 @@ func (s *Service) sendLightClientOptimisticUpdate(ctx context.Context, signed in
 		return 0, errors.Wrap(err, "could not create light client update")
 	}
 
-	optimisticUpdate := lightclienthelpers.NewLightClientOptimisticUpdateFromUpdate(update)
+	optimisticUpdate := NewLightClientOptimisticUpdateFromUpdate(update)
 
 	// Return the result
 	result := &ethpbv2.LightClientOptimisticUpdateResponse{

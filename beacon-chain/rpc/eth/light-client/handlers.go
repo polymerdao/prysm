@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/gorilla/mux"
-	rpchelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/shared"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
@@ -36,8 +36,7 @@ func (bs *Server) GetLightClientBootstrap(w http.ResponseWriter, req *http.Reque
 	var blockRoot [32]byte
 	copy(blockRoot[:], blockRootParam)
 	blk, err := bs.BeaconDB.Block(ctx, blockRoot)
-	if errJson := rpchelpers.HandleGetBlockErrorJson(blk, err); errJson != nil {
-		http2.WriteError(w, errJson)
+	if !shared.WriteBlockFetchError(w, blk, err) {
 		return
 	}
 
@@ -237,8 +236,7 @@ func (bs *Server) GetLightClientFinalityUpdate(w http.ResponseWriter, req *http.
 	minSignatures := uint64(math.Ceil(float64(config.MinSyncCommitteeParticipants) * 2 / 3))
 
 	block, err := bs.getLightClientEventBlock(ctx, minSignatures)
-	if errJson := rpchelpers.HandleGetBlockErrorJson(block, err); errJson != nil {
-		http2.WriteError(w, errJson)
+	if !shared.WriteBlockFetchError(w, block, err) {
 		return
 	}
 
@@ -305,8 +303,7 @@ func (bs *Server) GetLightClientOptimisticUpdate(w http.ResponseWriter, req *htt
 	minSignatures := config.MinSyncCommitteeParticipants
 
 	block, err := bs.getLightClientEventBlock(ctx, minSignatures)
-	if errJson := rpchelpers.HandleGetBlockErrorJson(block, err); errJson != nil {
-		http2.WriteError(w, errJson)
+	if !shared.WriteBlockFetchError(w, block, err) {
 		return
 	}
 

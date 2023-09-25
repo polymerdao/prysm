@@ -4,11 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/prysmaticlabs/prysm/v4/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/apimiddleware"
-	lightclienthelpers "github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/eth/helpers/lightclient"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
@@ -16,7 +15,6 @@ import (
 	v1 "github.com/prysmaticlabs/prysm/v4/proto/eth/v1"
 	v2 "github.com/prysmaticlabs/prysm/v4/proto/eth/v2"
 	"github.com/prysmaticlabs/prysm/v4/time/slots"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // NewLightClientBootstrapFromBeaconState - implements https://github.com/ethereum/consensus-specs/blob/3d235740e5f1e641d3b160c8688f26e7dc5a1894/specs/altair/light-client/full-node.md#create_light_client_bootstrap
@@ -161,7 +159,7 @@ func NewLightClientUpdateFromBeaconState(
 	attestedState state.BeaconState,
 	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
 
-	result, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+	result, err := blockchain.NewLightClientFinalityUpdateFromBeaconState(
 		ctx, config, state, block, attestedState, finalizedBlock)
 	if err != nil {
 		return nil, err
@@ -221,7 +219,7 @@ func NewLightClientFinalityUpdateFromBeaconState(
 	attestedState state.BeaconState,
 	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*LightClientUpdate, error) {
 
-	result, err := lightclienthelpers.NewLightClientFinalityUpdateFromBeaconState(
+	result, err := blockchain.NewLightClientFinalityUpdateFromBeaconState(
 		ctx, config, state, block, attestedState, finalizedBlock)
 	if err != nil {
 		return nil, err
@@ -237,7 +235,7 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState) (*LightClientUpdate, error) {
 
-	result, err := lightclienthelpers.NewLightClientOptimisticUpdateFromBeaconState(
+	result, err := blockchain.NewLightClientOptimisticUpdateFromBeaconState(
 		ctx, config, state, block, attestedState)
 	if err != nil {
 		return nil, err
@@ -259,31 +257,6 @@ func NewLightClientBootstrapFromJSON(bootstrapJSON *LightClientBootstrap) (*v2.L
 		return nil, err
 	}
 	return bootstrap, nil
-}
-
-func NewGenesisResponse_GenesisFromJSON(genesisJSON *apimiddleware.GenesisResponse_GenesisJson) (*v1.GenesisResponse_Genesis, error) {
-	genesis := &v1.GenesisResponse_Genesis{}
-	genesisTime, err := timeFromJSON(genesisJSON.GenesisTime)
-	if err != nil {
-		return nil, err
-	}
-	genesis.GenesisTime = timestamppb.New(*genesisTime)
-	if genesis.GenesisValidatorsRoot, err = hexutil.Decode(genesisJSON.GenesisValidatorsRoot); err != nil {
-		return nil, err
-	}
-	if genesis.GenesisForkVersion, err = hexutil.Decode(genesisJSON.GenesisForkVersion); err != nil {
-		return nil, err
-	}
-	return genesis, nil
-}
-
-func timeFromJSON(timestamp string) (*time.Time, error) {
-	timeInt, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	t := time.Unix(timeInt, 0)
-	return &t, nil
 }
 
 func headerFromJSON(headerJSON *apimiddleware.BeaconBlockHeaderJson) (*v1.BeaconBlockHeader, error) {
