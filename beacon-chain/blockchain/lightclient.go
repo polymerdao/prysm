@@ -1,11 +1,10 @@
-package lightclient
+package blockchain
 
 import (
 	"bytes"
 	"context"
 	"fmt"
 
-	"github.com/prysmaticlabs/prysm/v4/beacon-chain/rpc/core"
 	"github.com/prysmaticlabs/prysm/v4/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v4/config/params"
 	"github.com/prysmaticlabs/prysm/v4/consensus-types/interfaces"
@@ -21,56 +20,53 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 	config *params.BeaconChainConfig,
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
-	attestedState state.BeaconState) (*ethpbv2.LightClientUpdate, *core.RpcError) {
+	attestedState state.BeaconState) (*ethpbv2.LightClientUpdate, error) {
 	// assert compute_epoch_at_slot(attested_state.slot) >= ALTAIR_FORK_EPOCH
 	attestedEpoch := types.Epoch(uint64(attestedState.Slot()) / uint64(config.SlotsPerEpoch))
 	if attestedEpoch < types.Epoch(config.AltairForkEpoch) {
-		return nil, &core.RpcError{Err: fmt.Errorf("Invalid attested epoch: %d", attestedEpoch), Reason: core.BadRequest}
+		return nil, fmt.Errorf("invalid attested epoch: %d", attestedEpoch)
 	}
 
 	// assert sum(block.message.body.sync_aggregate.sync_committee_bits) >= MIN_SYNC_COMMITTEE_PARTICIPANTS
 	syncAggregate, err := block.Block().Body().SyncAggregate()
 	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("Could not get sync aggregate: %v", err), Reason: core.Internal}
+		return nil, fmt.Errorf("could not get sync aggregate: %v", err)
 	}
 
 	if syncAggregate.SyncCommitteeBits.Count() < config.MinSyncCommitteeParticipants {
-		return nil, &core.RpcError{
-			Err:    fmt.Errorf("Invalid sync committee bits count: %d", syncAggregate.SyncCommitteeBits.Count()),
-			Reason: core.BadRequest,
-		}
+		return nil, fmt.Errorf("invalid sync committee bits count: %d", syncAggregate.SyncCommitteeBits.Count())
 	}
 
 	// assert state.slot == state.latest_block_header.slot
 	if state.Slot() != state.LatestBlockHeader().Slot {
-		return nil, &core.RpcError{Err: fmt.Errorf("Invalid state slot: %d", state.Slot()), Reason: core.BadRequest}
+		return nil, fmt.Errorf("invalid state slot: %d", state.Slot())
 	}
 
 	// assert hash_tree_root(header) == hash_tree_root(block.message)
 	header := *state.LatestBlockHeader()
 	stateRoot, err := state.HashTreeRoot(ctx)
 	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("Could not get state root: %v", err), Reason: core.Internal}
+		return nil, fmt.Errorf("could not get state root: %v", err)
 	}
 	header.StateRoot = stateRoot[:]
 
 	headerRoot, err := header.HashTreeRoot()
 	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("Could not get header root: %v", err), Reason: core.Internal}
+		return nil, fmt.Errorf("could not get header root: %v", err)
 	}
 
 	blockRoot, err := block.Block().HashTreeRoot()
 	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("Could not get block root: %v", err), Reason: core.Internal}
+		return nil, fmt.Errorf("could not get block root: %v", err)
 	}
 
 	if headerRoot != blockRoot {
-		return nil, &core.RpcError{Err: fmt.Errorf("Invalid header root: %v", headerRoot), Reason: core.BadRequest}
+		return nil, fmt.Errorf("invalid header root: %v", headerRoot)
 	}
 
 	// assert attested_state.slot == attested_state.latest_block_header.slot
 	if attestedState.Slot() != attestedState.LatestBlockHeader().Slot {
-		return nil, &core.RpcError{Err: fmt.Errorf("Invalid attested state slot: %d", attestedState.Slot()), Reason: core.BadRequest}
+		return nil, fmt.Errorf("invalid attested state slot: %d", attestedState.Slot())
 	}
 
 	// attested_header = attested_state.latest_block_header.copy()
@@ -79,14 +75,14 @@ func NewLightClientOptimisticUpdateFromBeaconState(
 	// attested_header.state_root = hash_tree_root(attested_state)
 	attestedStateRoot, err := attestedState.HashTreeRoot(ctx)
 	if err != nil {
-		return nil, &core.RpcError{Err: fmt.Errorf("Could not get attested state root: %v", err), Reason: core.Internal}
+		return nil, fmt.Errorf("could not get attested state root: %v", err)
 	}
 	attestedHeader.StateRoot = attestedStateRoot[:]
 
 	// assert hash_tree_root(attested_header) == block.message.parent_root
 	attestedHeaderRoot, err := attestedHeader.HashTreeRoot()
 	if err != nil || attestedHeaderRoot != block.Block().ParentRoot() {
-		return nil, &core.RpcError{Err: fmt.Errorf("Invalid attested header root: %v", attestedHeaderRoot), Reason: core.BadRequest}
+		return nil, fmt.Errorf("invalid attested header root: %v", attestedHeaderRoot)
 	}
 
 	// Return result
@@ -118,7 +114,7 @@ func NewLightClientFinalityUpdateFromBeaconState(
 	state state.BeaconState,
 	block interfaces.ReadOnlySignedBeaconBlock,
 	attestedState state.BeaconState,
-	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.LightClientUpdate, *core.RpcError) {
+	finalizedBlock interfaces.ReadOnlySignedBeaconBlock) (*ethpbv2.LightClientUpdate, error) {
 	result, err := NewLightClientOptimisticUpdateFromBeaconState(
 		ctx,
 		config,
@@ -138,21 +134,21 @@ func NewLightClientFinalityUpdateFromBeaconState(
 		if finalizedBlock.Block().Slot() != 0 {
 			tempFinalizedHeader, err := finalizedBlock.Header()
 			if err != nil {
-				return nil, &core.RpcError{Err: fmt.Errorf("Could not get finalized header: %v", err), Reason: core.Internal}
+				return nil, fmt.Errorf("could not get finalized header: %v", err)
 			}
 			finalizedHeader = migration.V1Alpha1SignedHeaderToV1(tempFinalizedHeader).GetMessage()
 
 			finalizedHeaderRoot, err := finalizedHeader.HashTreeRoot()
 			if err != nil {
-				return nil, &core.RpcError{Err: fmt.Errorf("Could not get finalized header root: %v", err), Reason: core.Internal}
+				return nil, fmt.Errorf("could not get finalized header root: %v", err)
 			}
 
 			if finalizedHeaderRoot != bytesutil.ToBytes32(attestedState.FinalizedCheckpoint().Root) {
-				return nil, &core.RpcError{Err: fmt.Errorf("Invalid finalized header root: %v", finalizedHeaderRoot), Reason: core.BadRequest}
+				return nil, fmt.Errorf("invalid finalized header root: %v", finalizedHeaderRoot)
 			}
 		} else {
 			if !bytes.Equal(attestedState.FinalizedCheckpoint().Root, make([]byte, 32)) {
-				return nil, &core.RpcError{Err: fmt.Errorf("Invalid finalized header root: %v", attestedState.FinalizedCheckpoint().Root), Reason: core.BadRequest}
+				return nil, fmt.Errorf("invalid finalized header root: %v", attestedState.FinalizedCheckpoint().Root)
 			}
 
 			finalizedHeader = &ethpbv1.BeaconBlockHeader{
@@ -167,7 +163,7 @@ func NewLightClientFinalityUpdateFromBeaconState(
 		var bErr error
 		finalityBranch, bErr = attestedState.FinalizedRootProof(ctx)
 		if bErr != nil {
-			return nil, &core.RpcError{Err: fmt.Errorf("Could not get finalized root proof: %v", bErr), Reason: core.Internal}
+			return nil, fmt.Errorf("could not get finalized root proof: %v", bErr)
 		}
 	} else {
 		finalizedHeader = &ethpbv1.BeaconBlockHeader{
