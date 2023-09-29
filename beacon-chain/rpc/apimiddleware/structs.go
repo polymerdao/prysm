@@ -45,6 +45,30 @@ type RandaoResponseJson struct {
 	Finalized           bool `json:"finalized"`
 }
 
+type LightClientFinalityUpdateResponseJson struct {
+	Version string                         `json:"version" enum:"true"`
+	Data    *LightClientFinalityUpdateJson `json:"data"`
+}
+
+type LightClientFinalityUpdateJson struct {
+	AttestedHeader  *BeaconBlockHeaderJson `json:"attested_header"`
+	FinalizedHeader *BeaconBlockHeaderJson `json:"finalized_header"`
+	FinalityBranch  []string               `json:"finality_branch"  hex:"true"`
+	SyncAggregate   *SyncAggregateJson     `json:"sync_aggregate"`
+	SignatureSlot   string                 `json:"signature_slot"`
+}
+
+type LightClientOptimisticUpdateResponseJson struct {
+	Version string                           `json:"version" enum:"true"`
+	Data    *LightClientOptimisticUpdateJson `json:"data"`
+}
+
+type LightClientOptimisticUpdateJson struct {
+	AttestedHeader *BeaconBlockHeaderJson `json:"attested_header"`
+	SyncAggregate  *SyncAggregateJson     `json:"sync_aggregate"`
+	SignatureSlot  string                 `json:"signature_slot"`
+}
+
 type BlockResponseJson struct {
 	Data *SignedBeaconBlockJson `json:"data"`
 }
